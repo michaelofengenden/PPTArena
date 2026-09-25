@@ -851,6 +851,11 @@ def evaluation_page():
         return error, 500
     return render_template('evaluation.html', active_tab='evaluation', **context)
 
+
+@app.route('/evaluation/google944d95ae4c99977e.html', methods=['GET'])
+def google_site_verification():
+    return send_from_directory(SCRIPT_DIR, 'google944d95ae4c99977e.html')
+
 @app.route('/download_original/<session_id>/<filename>')
 def download_original_file(session_id, filename):
     session_path = Path(app.config['SESSIONS_FOLDER']) / session_id

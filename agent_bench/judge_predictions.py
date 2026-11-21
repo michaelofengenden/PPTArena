@@ -144,22 +144,41 @@ def compose_prompt(prompt: str, style_target: str) -> str:
     return instruction
 
 
-def render_cached(pptx_path: Path, cache_dir: Path) -> list[str]:
-    """Render slides to PNGs once; reuse the cache on subsequent calls.
+RENDERED_MARKER = ".rendered"
 
-    A cached folder can also hold LibreOffice's own PNG export, which is slide 1
-    only and named after the deck. When the per-slide images from the PDF fallback
-    are there, only those are slides. Counting the leftover as well put a copy of
-    slide 1 at the front of every cached ground truth and shifted the rest by one.
+
+def cached_slides(cache_dir: Path | None) -> list[str] | None:
+    """Slide images already in a cache folder, in slide order, or None if it was never rendered.
+
+    A folder can also hold LibreOffice's own PNG export, which is slide 1 only and
+    named after the deck. When the per-slide images from the PDF fallback are there,
+    only those are slides. Counting the leftover as well put a copy of slide 1 at the
+    front of every cached ground truth and shifted the rest by one.
+
+    Slides rendered on another machine can be dropped into the folder. Such a folder
+    carries a `.rendered` marker, so a deck that produced no images at all (one
+    LibreOffice cannot open) is told apart from a deck nobody has rendered yet.
     """
-    if cache_dir.is_dir():
-        def slide_number(path: Path) -> int:
-            digits = re.findall(r"\d+", path.stem)
-            return int(digits[-1]) if digits else -1
+    if not cache_dir or not cache_dir.is_dir():
+        return None
 
-        cached = sorted(cache_dir.glob("slide-*.png"), key=slide_number) or sorted(cache_dir.glob("*.png"))
-        if cached:
-            return [str(p) for p in cached]
+    def slide_number(path: Path) -> int:
+        digits = re.findall(r"\d+", path.stem)
+        return int(digits[-1]) if digits else -1
+
+    cached = sorted(cache_dir.glob("slide-*.png"), key=slide_number) or sorted(cache_dir.glob("*.png"))
+    if cached or (cache_dir / RENDERED_MARKER).exists():
+        return [str(p) for p in cached]
+    return None
+
+
+def render_cached(pptx_path: Path, cache_dir: Path, local_render: bool = True) -> list[str]:
+    """Render slides to PNGs once; reuse the cache on subsequent calls."""
+    cached = cached_slides(cache_dir)
+    if cached is not None:
+        return cached
+    if not local_render:
+        raise RuntimeError(f"No pre-rendered slides in {cache_dir.parent.name}/{cache_dir.name}")
     cache_dir.mkdir(parents=True, exist_ok=True)
     return export_slides_to_images(str(pptx_path), str(cache_dir))
 
@@ -167,7 +186,9 @@ def render_cached(pptx_path: Path, cache_dir: Path) -> list[str]:
 class CaseArtifacts:
     """Prediction-independent judge inputs, computed once per case."""
 
-    def __init__(self) -> None:
+    def __init__(self, render_root: Path = RENDER_CACHE_ROOT, local_render: bool = True) -> None:
+        self._render_root = render_root
+        self._local_render = local_render
         self._store: dict[str, dict] = {}
         self._locks: dict[str, Lock] = {}
         self._master = Lock()
@@ -180,7 +201,8 @@ class CaseArtifacts:
             if name not in self._store:
                 initial_path = (PROJECT_ROOT / case["original"]).resolve()
                 gt_path = (PROJECT_ROOT / case["ground_truth"]).resolve()
-                gt_imgs = render_cached(gt_path, RENDER_CACHE_ROOT / slugify(name) / "gt")
+                gt_imgs = render_cached(gt_path, self._render_root / slugify(name) / "gt",
+                                        self._local_render)
                 self._store[name] = {
                     "init_json": pptx_to_json(str(initial_path)),
                     "gt_json": pptx_to_json(str(gt_path)),
@@ -263,7 +285,8 @@ def collect_samples(sample_count: int, judge_once, cache_dir: Path | None = None
 
 def judge_case(case: dict, prediction_path: Path, artifacts_cache: CaseArtifacts,
                api_keys: dict, judge_model: str, samples: int, judge_label: str,
-               cache_dir: Path | None = None, prediction_label: str | None = None) -> dict:
+               cache_dir: Path | None = None, prediction_label: str | None = None,
+               render_dir: Path | None = None, local_render: bool = True) -> dict:
     prediction_label = prediction_label or str(prediction_path)
     inputs: dict = {}
 
@@ -272,9 +295,15 @@ def judge_case(case: dict, prediction_path: Path, artifacts_cache: CaseArtifacts
         # deck whose samples are all on disk costs nothing.
         if not inputs:
             artifacts = artifacts_cache.get(case)
-            with tempfile.TemporaryDirectory() as tmpdir:
-                pred_imgs = export_slides_to_images(str(prediction_path), str(Path(tmpdir) / "pred"))
+            pred_imgs = cached_slides(render_dir)
+            if pred_imgs is not None:
                 pred_b64 = [b for b in (image_to_base64(p) for p in pred_imgs) if b]
+            elif not local_render:
+                raise RuntimeError(f"No pre-rendered slides for {prediction_label}")
+            else:
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    pred_imgs = export_slides_to_images(str(prediction_path), str(Path(tmpdir) / "pred"))
+                    pred_b64 = [b for b in (image_to_base64(p) for p in pred_imgs) if b]
             pred_xml = extract_specific_xml_from_pptx(str(prediction_path), "ppt/slides/slide1.xml") or ""
             inputs.update(artifacts=artifacts, pred_b64=pred_b64, pred_xml=pred_xml)
         return call_judge_once(case, inputs["artifacts"], pred_json, inputs["pred_b64"],
@@ -331,7 +360,8 @@ def judge_agent(agent_id: str, cases: list[dict], artifacts_cache: CaseArtifacts
                 max_workers: int, resume: bool,
                 suffix: str = "_judge_results.csv",
                 predictions_root: Path = PREDICTIONS_ROOT,
-                sample_cache: Path | None = None) -> None:
+                sample_cache: Path | None = None,
+                render_root: Path = RENDER_CACHE_ROOT, local_render: bool = True) -> None:
     judge_label = judge_model if samples == 1 else f"{judge_model} (median of {samples})"
     output_path = RESULTS_ROOT / f"{agent_id}{suffix}"
     RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
@@ -371,7 +401,8 @@ def judge_agent(agent_id: str, cases: list[dict], artifacts_cache: CaseArtifacts
             return None
         cache_dir = sample_cache / agent_id / slug if sample_cache else None
         return judge_case(case, prediction, artifacts_cache, api_keys, judge_model, samples,
-                          judge_label, cache_dir=cache_dir, prediction_label=label)
+                          judge_label, cache_dir=cache_dir, prediction_label=label,
+                          render_dir=render_root / slug / f"pred_{agent_id}", local_render=local_render)
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {pool.submit(work, case): case for case in todo}
@@ -420,6 +451,13 @@ def main() -> None:
                         help="Folder to keep each judged sample in. A rerun with the same folder "
                              "only judges what is missing, which suits --no-resume after an "
                              "interrupted or rate-limited run. Use one folder per judge.")
+    parser.add_argument("--render-cache", type=Path, default=RENDER_CACHE_ROOT,
+                        help="Folder of slide renders: <case_slug>/gt for ground truth and "
+                             "<case_slug>/pred_<agent_id> for predictions. Renders made on another "
+                             "machine can be dropped in here (see render_decks.py).")
+    parser.add_argument("--no-local-render", action="store_true",
+                        help="Never start LibreOffice on this machine. A deck with no renders in "
+                             "--render-cache fails its sample instead.")
     parser.add_argument("--csv-suffix", default="_judge_results.csv",
                         help="Result filename suffix — use a distinct one per judge for "
                              "agreement studies (e.g. '_qwen_judge_results.csv').")
@@ -460,12 +498,13 @@ def main() -> None:
     elif not (keys.get("gemini") or keys.get("gemini_api_key")):
         sys.exit("GEMINI_API_KEY missing from credentials.env; required for gemini-* judges.")
 
-    artifacts_cache = CaseArtifacts()
+    artifacts_cache = CaseArtifacts(args.render_cache, local_render=not args.no_local_render)
     for agent_id in agent_ids:
         judge_agent(agent_id, pairs, artifacts_cache, keys, args.judge_model,
                     args.samples, args.max_workers, resume=not args.no_resume,
                     suffix=args.csv_suffix, predictions_root=args.predictions_root,
-                    sample_cache=args.sample_cache)
+                    sample_cache=args.sample_cache, render_root=args.render_cache,
+                    local_render=not args.no_local_render)
 
     if codex_judge.usage_totals["runs"]:
         totals = codex_judge.usage_totals

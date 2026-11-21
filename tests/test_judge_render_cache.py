@@ -63,5 +63,59 @@ class RenderConcurrencyTest(unittest.TestCase):
         self.assertEqual(self.slots({"PPT_RENDER_CONCURRENCY": "3"}), 3)
 
 
+class PreRenderedSlidesTest(unittest.TestCase):
+    """Slides rendered somewhere else can be dropped into the cache and used as they are."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def folder(self, *names):
+        folder = self.root / "case_001" / "pred_some_agent"
+        folder.mkdir(parents=True)
+        for name in names:
+            (folder / name).write_bytes(b"png:" + name.encode())
+        return folder
+
+    def judge(self, render_dir, local_render):
+        from unittest import mock
+
+        deck = self.root / "case_001.pptx"
+        deck.write_bytes(b"deck")
+        seen = {}
+
+        def fake_judge(case, artifacts, pred_json, pred_b64, pred_xml, api_keys, judge_model):
+            seen["images"] = pred_b64
+            return {"instruction_following_score": 4, "visual_quality_score": 3}
+
+        artifacts = mock.Mock()
+        artifacts.get.return_value = {"init_json": {}, "gt_json": {}, "gt_b64": [], "gt_xml": ""}
+        with mock.patch.object(jp, "pptx_to_json", return_value={}), \
+                mock.patch.object(jp, "extract_specific_xml_from_pptx", return_value=""), \
+                mock.patch.object(jp, "call_judge_once", side_effect=fake_judge), \
+                mock.patch.object(jp, "export_slides_to_images",
+                                  side_effect=AssertionError("LibreOffice must not run here")):
+            row = jp.judge_case({"name": "Case 1: Demo"}, deck, artifacts, {}, "codex/gpt-6.2-sol", 1,
+                                "codex/gpt-6.2-sol", render_dir=render_dir, local_render=local_render)
+        return row, seen
+
+    def test_a_folder_never_rendered_is_told_apart_from_a_deck_with_no_slides(self):
+        self.assertIsNone(jp.cached_slides(self.root / "missing"))
+        self.assertEqual(jp.cached_slides(self.folder(".rendered")), [])
+
+    def test_pre_rendered_slides_are_used_without_starting_libreoffice(self):
+        import base64
+
+        row, seen = self.judge(self.folder("slide-2.png", "slide-1.png", ".rendered"), local_render=False)
+        self.assertEqual(row["errors"], "")
+        self.assertEqual([base64.b64decode(b) for b in seen["images"]], [b"png:slide-1.png", b"png:slide-2.png"])
+
+    def test_without_local_rendering_a_deck_with_no_renders_fails_instead_of_scoring(self):
+        row, seen = self.judge(self.root / "case_001" / "pred_other_agent", local_render=False)
+        self.assertIn("No pre-rendered slides", row["errors"])
+        self.assertEqual(seen, {})
+
+
 if __name__ == "__main__":
     unittest.main()

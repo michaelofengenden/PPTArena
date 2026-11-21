@@ -37,6 +37,7 @@ import argparse
 import base64
 import csv
 import json
+import re
 import statistics
 import sys
 import tempfile
@@ -137,11 +138,21 @@ def compose_prompt(prompt: str, style_target: str) -> str:
 
 
 def render_cached(pptx_path: Path, cache_dir: Path) -> list[str]:
-    """Render slides to PNGs once; reuse the cache on subsequent calls."""
+    """Render slides to PNGs once; reuse the cache on subsequent calls.
+
+    A cached folder can also hold LibreOffice's own PNG export, which is slide 1
+    only and named after the deck. When the per-slide images from the PDF fallback
+    are there, only those are slides. Counting the leftover as well put a copy of
+    slide 1 at the front of every cached ground truth and shifted the rest by one.
+    """
     if cache_dir.is_dir():
-        cached = sorted(str(p) for p in cache_dir.glob("*.png"))
+        def slide_number(path: Path) -> int:
+            digits = re.findall(r"\d+", path.stem)
+            return int(digits[-1]) if digits else -1
+
+        cached = sorted(cache_dir.glob("slide-*.png"), key=slide_number) or sorted(cache_dir.glob("*.png"))
         if cached:
-            return cached
+            return [str(p) for p in cached]
     cache_dir.mkdir(parents=True, exist_ok=True)
     return export_slides_to_images(str(pptx_path), str(cache_dir))
 

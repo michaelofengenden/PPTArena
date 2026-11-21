@@ -8,6 +8,7 @@ import tempfile
 from collections import defaultdict
 
 from ppt.export import export_slides_to_images, convert_pptx_to_pdf, convert_pptx_to_base64_images
+from ppt.slide_alignment import align_slides, slides_line_up, summarize_slide
 from pathlib import Path
 import base64
 import re
@@ -646,10 +647,48 @@ def diff_pptx_json(ground_truth_json, prediction_json, initial_json=None):
     pred_slides = prediction_json.get("slides", [])
     init_slides = initial_json.get("slides", []) if initial_json else []
     
-    for slide_idx in range(max(len(gt_slides), len(pred_slides))):
-        gt_slide = gt_slides[slide_idx] if slide_idx < len(gt_slides) else {}
-        pred_slide = pred_slides[slide_idx] if slide_idx < len(pred_slides) else {}
+    # Pair slides by content, not position, so one inserted or dropped slide
+    # does not make every later slide look changed. When the decks already
+    # line up this is the same slide-by-slide comparison as before.
+    slide_pairs = align_slides(gt_slides, pred_slides)
+    shifted = not slides_line_up(slide_pairs)
+
+    for gt_idx, pred_idx in slide_pairs:
+        if gt_idx is None:
+            differences.append({
+                "property_path": f"prediction_slide_{pred_idx + 1}",
+                "change_type": "added",
+                "ground_truth_value": None,
+                "prediction_value": summarize_slide(pred_slides[pred_idx]),
+                "initial_value": None,
+                "slide_number": pred_idx + 1,
+                "ground_truth_slide_number": None,
+                "prediction_slide_number": pred_idx + 1,
+                "slide_change": "inserted",
+            })
+            continue
+        if pred_idx is None:
+            differences.append({
+                "property_path": f"slide_{gt_idx + 1}",
+                "change_type": "removed",
+                "ground_truth_value": summarize_slide(gt_slides[gt_idx]),
+                "prediction_value": None,
+                "initial_value": None,
+                "slide_number": gt_idx + 1,
+                "ground_truth_slide_number": gt_idx + 1,
+                "prediction_slide_number": None,
+                "slide_change": "missing",
+            })
+            continue
+
+        slide_idx = gt_idx
+        gt_slide = gt_slides[gt_idx]
+        pred_slide = pred_slides[pred_idx]
         init_slide = init_slides[slide_idx] if slide_idx < len(init_slides) else {}
+        if shifted:
+            # slide_number is the slide's position, which the pairing already covers.
+            gt_slide = {k: v for k, v in gt_slide.items() if k != "slide_number"}
+            pred_slide = {k: v for k, v in pred_slide.items() if k != "slide_number"}
         
         slide_number = slide_idx + 1
         
@@ -660,6 +699,9 @@ def diff_pptx_json(ground_truth_json, prediction_json, initial_json=None):
         # Tag differences with slide context
         for diff in differences[slide_diff_start:]:
             diff["slide_number"] = slide_number
+            if shifted:
+                diff["ground_truth_slide_number"] = slide_number
+                diff["prediction_slide_number"] = pred_idx + 1
             
             # Extract shape context if available
             if "shapes[" in diff["property_path"]:
@@ -675,12 +717,18 @@ def diff_pptx_json(ground_truth_json, prediction_json, initial_json=None):
     total_properties = len(differences) + 100  # Baseline to avoid division by zero
     similarity_score = 1.0 - (len(differences) / total_properties)
     
-    return {
+    result = {
         "has_differences": len(differences) > 0,
         "similarity_score": max(0.0, min(1.0, similarity_score)),
         "total_differences": len(differences),
         "differences": differences
     }
+    if shifted:
+        result["slide_alignment"] = [
+            [None if gt_idx is None else gt_idx + 1, None if pred_idx is None else pred_idx + 1]
+            for gt_idx, pred_idx in slide_pairs
+        ]
+    return result
 
 
 def should_use_xml_fallback(instruction_text, has_smartart=False, has_transitions=False):
@@ -723,10 +771,16 @@ def format_diff_for_judge(diff_result, instruction_text=""):
     if not differences:
         return "✓ No significant differences detected."
     
+    # Slides with no counterpart are listed on their own, not as property changes
+    structure = [diff for diff in differences if diff.get("slide_change")]
+    differences = [diff for diff in differences if not diff.get("slide_change")]
+
     # Group differences by slide and shape
     by_slide = {}
+    prediction_slide = {}
     for diff in differences:
         slide_num = diff.get("slide_number", 0)
+        prediction_slide[slide_num] = diff.get("prediction_slide_number", slide_num)
         if slide_num not in by_slide:
             by_slide[slide_num] = {}
         
@@ -751,8 +805,25 @@ def format_diff_for_judge(diff_result, instruction_text=""):
     lines.append("Detailed Differences:")
     lines.append("=" * 80)
     
+    if structure:
+        lines.append("\n🧩 Slide structure (slides are matched by content, not by position):")
+        for diff in structure:
+            if diff["slide_change"] == "inserted":
+                lines.append(
+                    f"  + Prediction slide {diff['prediction_slide_number']} has no counterpart in the "
+                    f"Ground Truth (extra slide): {diff['prediction_value']}"
+                )
+            else:
+                lines.append(
+                    f"  - Ground Truth slide {diff['ground_truth_slide_number']} has no counterpart in the "
+                    f"Prediction (missing slide): {diff['ground_truth_value']}"
+                )
+
     for slide_num in sorted(by_slide.keys()):
-        lines.append(f"\n📄 Slide {slide_num}:")
+        if prediction_slide[slide_num] != slide_num:
+            lines.append(f"\n📄 Slide {slide_num} (Prediction slide {prediction_slide[slide_num]}):")
+        else:
+            lines.append(f"\n📄 Slide {slide_num}:")
         
         for shape_name, shape_diffs in by_slide[slide_num].items():
             lines.append(f"  └─ {shape_name}")

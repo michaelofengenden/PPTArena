@@ -427,6 +427,83 @@ Output a single JSON object with:
 
             style_block = style_target_text.strip() if style_target_text else "Not provided."
 
+            # Content-matched slide pairs as (gt_idx, pred_idx), with None for a slide
+            # that has no counterpart. None means the decks line up, so slide i is
+            # compared with slide i exactly as before.
+            aligned_pairs = ppt_processor.visual_slide_pairs(original_ppt_json, modified_ppt_json, olen, mlen)
+
+            def _pair_note(pairs):
+                """Tell the judge which labeled slides belong together when positions differ."""
+                if aligned_pairs is None:
+                    return ""
+                note = [
+                    "",
+                    "",
+                    f"Slide matching: the decks differ in slide structure (Ground Truth has {olen} slides, "
+                    f"Prediction has {mlen}), so slides are matched by content, not by position.",
+                ]
+                for gt_idx, pred_idx in pairs:
+                    if gt_idx is None:
+                        note.append(f"- PREDICTION_SLIDE_{pred_idx + 1} has no counterpart in the Ground Truth (extra slide)")
+                    elif pred_idx is None:
+                        note.append(f"- GROUND_TRUTH_SLIDE_{gt_idx + 1} has no counterpart in the Prediction (missing slide)")
+                    elif gt_idx != pred_idx:
+                        note.append(f"- GROUND_TRUTH_SLIDE_{gt_idx + 1} corresponds to PREDICTION_SLIDE_{pred_idx + 1}")
+                note.append(
+                    "Compare each Ground Truth slide with its matching Prediction slide. "
+                    "An extra or missing slide is a change to slide structure."
+                )
+                return "\n".join(note)
+
+            def _batch_label(batch):
+                """Slide numbers in a batch; just the number when both decks agree on it."""
+                parts = []
+                for gt_idx, pred_idx in batch:
+                    if gt_idx is None:
+                        parts.append(f"Prediction {pred_idx + 1}")
+                    elif pred_idx is None or pred_idx == gt_idx:
+                        parts.append(str(gt_idx + 1))
+                    else:
+                        parts.append(f"{gt_idx + 1} (Prediction {pred_idx + 1})")
+                return ", ".join(parts)
+
+            def _flag_pairs_for_vlm(ssim_threshold, phash_threshold):
+                """Slide pairs that differ enough to be worth showing the VLM."""
+                candidates = aligned_pairs
+                if candidates is None:
+                    candidates = [(i, i) for i in range(min(olen, mlen))]
+                flagged = []
+                for pair in candidates:
+                    gt_idx, pred_idx = pair
+                    label = _batch_label([pair])
+                    if gt_idx is None or pred_idx is None:
+                        flagged.append(pair)
+                        _log(f"[VisualJudge] Slide {label}: no counterpart → flagged for VLM", request_id)
+                        continue
+                    gt_img = _pil_from_b64(original_list[gt_idx])
+                    pred_img = _pil_from_b64(modified_list[pred_idx])
+                    if gt_img is None or pred_img is None:
+                        flagged.append(pair)
+                        _log(f"[VisualJudge] Slide {label}: missing image → flagged for VLM", request_id)
+                        continue
+                    a = _resize_for_metric(gt_img)
+                    b = _resize_for_metric(pred_img)
+                    if a.size != b.size:
+                        b = b.resize(a.size, Image.BILINEAR)
+                    ssim = _compute_ssim(_to_gray_np(a), _to_gray_np(b))
+                    hdist = _hamming_distance64(_dct_8x8_hash(a), _dct_8x8_hash(b))
+                    if ssim < ssim_threshold or hdist > phash_threshold:
+                        flagged.append(pair)
+                        _log(f"[VisualJudge] Slide {label}: SSIM={ssim:.4f}, pHashDist={hdist} → flagged", request_id)
+                    else:
+                        _log(f"[VisualJudge] Slide {label}: SSIM={ssim:.4f}, pHashDist={hdist} → likely identical", request_id)
+                if not flagged:
+                    flagged = [pair for pair in candidates if None not in pair][:5]
+                    _log(f"[VisualJudge] No slides flagged; sampling slides {_batch_label(flagged)}", request_id)
+                else:
+                    _log(f"[VisualJudge] Flagged slides for VLM: {_batch_label(flagged)}", request_id)
+                return flagged
+
             if use_openai or use_kimi:
                 provider_name = "OpenAI" if use_openai else "Kimi"
                 text_part_type = "input_text" if use_openai else "text"
@@ -493,7 +570,7 @@ Output a single JSON object with:
 
 You are given two labeled image sequences:
 - Ground Truth: the correct target deck to match (length: {olen} slides)
-- Prediction: the candidate deck produced by the system (length: {mlen} slides)
+- Prediction: the candidate deck produced by the system (length: {mlen} slides){_pair_note(aligned_pairs)}
 
 CRITICAL: Ground Truth is ONE valid example, not the only correct answer.
 Judge if Prediction achieves the SEMANTIC INTENT shown by Ground Truth.
@@ -517,45 +594,20 @@ Return only:
 
                 SSIM_THRESHOLD = float(os.environ.get("VISUAL_SSIM_THRESH", "0.9995"))
                 PHASH_DIST_THRESHOLD = int(os.environ.get("VISUAL_PHASH_THRESH", "2"))
-                differing_indices: List[int] = []
-                max_index = min(olen, mlen)
-                for idx in range(max_index):
-                    gt_img = _pil_from_b64(original_list[idx]) if idx < olen else None
-                    pred_img = _pil_from_b64(modified_list[idx]) if idx < mlen else None
-                    if gt_img is None or pred_img is None:
-                        differing_indices.append(idx)
-                        _log(f"[VisualJudge] Slide {idx+1}: missing image → flagged for VLM", request_id)
-                        continue
-                    a = _resize_for_metric(gt_img)
-                    b = _resize_for_metric(pred_img)
-                    if a.size != b.size:
-                        b = b.resize(a.size, Image.BILINEAR)
-                    ssim = _compute_ssim(_to_gray_np(a), _to_gray_np(b))
-                    ph_a = _dct_8x8_hash(a)
-                    ph_b = _dct_8x8_hash(b)
-                    hdist = _hamming_distance64(ph_a, ph_b)
-                    if ssim < SSIM_THRESHOLD or hdist > PHASH_DIST_THRESHOLD:
-                        differing_indices.append(idx)
-                        _log(f"[VisualJudge] Slide {idx+1}: SSIM={ssim:.4f}, pHashDist={hdist} → flagged", request_id)
-                    else:
-                        _log(f"[VisualJudge] Slide {idx+1}: SSIM={ssim:.4f}, pHashDist={hdist} → likely identical", request_id)
-
-                if not differing_indices:
-                    differing_indices = list(range(min(5, max_index)))
-                    _log(f"[VisualJudge] No slides flagged; sampling slides {[i+1 for i in differing_indices]}", request_id)
-                else:
-                    _log(f"[VisualJudge] Flagged slides for VLM: {[i+1 for i in differing_indices]}", request_id)
+                differing_pairs = _flag_pairs_for_vlm(SSIM_THRESHOLD, PHASH_DIST_THRESHOLD)
 
                 chunk_size = 5
-                batches = [differing_indices[i:i + chunk_size] for i in range(0, len(differing_indices), chunk_size)]
+                batches = [differing_pairs[i:i + chunk_size] for i in range(0, len(differing_pairs), chunk_size)]
                 if len(batches) >= 2 and len(batches[-1]) < 3:
                     batches[-2].extend(batches[-1])
                     batches = batches[:-1]
-                _log(f"[VisualJudge] Created {len(batches)} batch(es): {[ [j+1 for j in b] for b in batches ]}", request_id)
+                _log(f"[VisualJudge] Created {len(batches)} batch(es): {[_batch_label(b) for b in batches]}", request_id)
 
                 batch_scores: List[float] = []
                 batch_reasons: List[str] = []
                 for batch in batches:
+                    gt_indices = [g for g, _ in batch if g is not None]
+                    pred_indices = [p for _, p in batch if p is not None]
                     prompt_text = f"""
 --- User Instruction ---
 {instruction_text or user_prompt}
@@ -563,9 +615,9 @@ Return only:
 --- Style Target (judge rubric, unseen by the model under evaluation) ---
 {style_block}
 
-You are given two labeled image sequences for slides: {', '.join(str(i+1) for i in batch)}
-- Ground Truth: the correct target deck to match (slides available in this batch: {min(len(batch), olen)})
-- Prediction: the candidate deck produced by the system (slides available in this batch: {min(len(batch), mlen)})
+You are given two labeled image sequences for slides: {_batch_label(batch)}
+- Ground Truth: the correct target deck to match (slides available in this batch: {len(gt_indices)})
+- Prediction: the candidate deck produced by the system (slides available in this batch: {len(pred_indices)}){_pair_note(batch)}
 
 CRITICAL: Ground Truth is ONE valid example, not the only correct answer.
 Judge if Prediction achieves the SEMANTIC INTENT shown by Ground Truth.
@@ -579,13 +631,13 @@ Return only:
 - visual_quality_reason (one sentence, specific evidence about visual differences)
 """
                     content = [{"type": text_part_type, "text": prompt_text.strip()}]
-                    _append_sequence("GROUND_TRUTH", original_list, batch, content)
-                    _append_sequence("PREDICTION", modified_list, batch, content)
+                    _append_sequence("GROUND_TRUTH", original_list, gt_indices, content)
+                    _append_sequence("PREDICTION", modified_list, pred_indices, content)
                     parsed = _send_openai_compatible(content)
                     vscore, vreason = _extract_visual_fields(parsed)
                     batch_scores.append(vscore)
                     batch_reasons.append(vreason)
-                    _log(f"[VisualJudge] Batch slides {[i+1 for i in batch]} ({provider_name}) → score={vscore}, reason='{vreason}'", request_id)
+                    _log(f"[VisualJudge] Batch slides {_batch_label(batch)} ({provider_name}) → score={vscore}, reason='{vreason}'", request_id)
 
                 if batch_scores:
                     min_score = round(min(batch_scores), 2)
@@ -638,7 +690,7 @@ Return only:
 
 You are given two labeled image sequences:
 - Ground Truth: the correct target deck to match (length: {olen} slides)
-- Prediction: the candidate deck produced by the system (length: {mlen} slides)
+- Prediction: the candidate deck produced by the system (length: {mlen} slides){_pair_note(aligned_pairs)}
 
 CRITICAL: Ground Truth is ONE valid example, not the only correct answer.
 Judge if Prediction achieves the SEMANTIC INTENT shown by Ground Truth.
@@ -682,55 +734,30 @@ Return only:
             SSIM_THRESHOLD = float(os.environ.get("VISUAL_SSIM_THRESH", "0.995"))
             PHASH_DIST_THRESHOLD = int(os.environ.get("VISUAL_PHASH_THRESH", "2"))
 
-            differing_indices = []
-            max_index = min(olen, mlen)
-            for i in range(max_index):
-                gt_img = _pil_from_b64(original_list[i]) if i < olen else None
-                pred_img = _pil_from_b64(modified_list[i]) if i < mlen else None
-                if gt_img is None or pred_img is None:
-                    differing_indices.append(i)
-                    _log(f"[VisualJudge] Slide {i+1}: missing image → flagged for VLM", request_id)
-                    continue
-                a = _resize_for_metric(gt_img)
-                b = _resize_for_metric(pred_img)
-                if a.size != b.size:
-                    b = b.resize(a.size, Image.BILINEAR)
-                ssim = _compute_ssim(_to_gray_np(a), _to_gray_np(b))
-                ph_a = _dct_8x8_hash(a)
-                ph_b = _dct_8x8_hash(b)
-                hdist = _hamming_distance64(ph_a, ph_b)
-                if ssim < SSIM_THRESHOLD or hdist > PHASH_DIST_THRESHOLD:
-                    differing_indices.append(i)
-                    _log(f"[VisualJudge] Slide {i+1}: SSIM={ssim:.4f} (<th={SSIM_THRESHOLD}), pHashDist={hdist} (>th={PHASH_DIST_THRESHOLD}) → flagged", request_id)
-                else:
-                    _log(f"[VisualJudge] Slide {i+1}: SSIM={ssim:.4f}, pHashDist={hdist} → likely identical", request_id)
-
-            if not differing_indices:
-                differing_indices = list(range(min(5, max_index)))
-                _log(f"[VisualJudge] No slides flagged; sampling slides {[i+1 for i in differing_indices]} for verification", request_id)
-            else:
-                _log(f"[VisualJudge] Flagged slides for VLM: {[i+1 for i in differing_indices]}", request_id)
+            differing_pairs = _flag_pairs_for_vlm(SSIM_THRESHOLD, PHASH_DIST_THRESHOLD)
 
             chunk_size = 5
-            batches = [differing_indices[i:i+chunk_size] for i in range(0, len(differing_indices), chunk_size)]
+            batches = [differing_pairs[i:i+chunk_size] for i in range(0, len(differing_pairs), chunk_size)]
             if len(batches) >= 2 and len(batches[-1]) < 3:
                 batches[-2].extend(batches[-1])
                 batches = batches[:-1]
-            _log(f"[VisualJudge] Created {len(batches)} batch(es): {[ [j+1 for j in b] for b in batches ]}", request_id)
+            _log(f"[VisualJudge] Created {len(batches)} batch(es): {[_batch_label(b) for b in batches]}", request_id)
 
             batch_scores = []
             batch_reasons = []
             for batch in batches:
+                gt_indices = [g for g, _ in batch if g is not None]
+                pred_indices = [p for _, p in batch if p is not None]
                 parts = []
                 if original_list:
                     parts.append("--- GROUND TRUTH (Correct target deck) ---")
-                for idx in batch:
+                for idx in gt_indices:
                     if idx < olen and original_list[idx]:
                         parts.append(f"GROUND_TRUTH_SLIDE_{idx+1}")
                         parts.append({"inline_data": {"mime_type": "image/png", "data": original_list[idx]}})
                 if modified_list:
                     parts.append("--- PREDICTION (Candidate deck to evaluate) ---")
-                for idx in batch:
+                for idx in pred_indices:
                     if idx < mlen and modified_list[idx]:
                         parts.append(f"PREDICTION_SLIDE_{idx+1}")
                         parts.append({"inline_data": {"mime_type": "image/png", "data": modified_list[idx]}})
@@ -742,9 +769,9 @@ Return only:
 --- Style Target (judge rubric, unseen by the model under evaluation) ---
 {style_block}
 
-You are given two labeled image sequences for slides: {', '.join(str(i+1) for i in batch)}
-- Ground Truth: the correct target deck to match (slides available in this batch: {min(len(batch), olen)})
-- Prediction: the candidate deck produced by the system (slides available in this batch: {min(len(batch), mlen)})
+You are given two labeled image sequences for slides: {_batch_label(batch)}
+- Ground Truth: the correct target deck to match (slides available in this batch: {len(gt_indices)})
+- Prediction: the candidate deck produced by the system (slides available in this batch: {len(pred_indices)}){_pair_note(batch)}
 
 CRITICAL: Ground Truth is ONE valid example, not the only correct answer.
 Judge if Prediction achieves the SEMANTIC INTENT shown by Ground Truth.
@@ -780,7 +807,7 @@ Return only:
                     vscore = 0
                 batch_scores.append(vscore)
                 batch_reasons.append(vreason)
-                _log(f"[VisualJudge] Batch slides {[i+1 for i in batch]} → score={vscore}, reason='{vreason}'", request_id)
+                _log(f"[VisualJudge] Batch slides {_batch_label(batch)} → score={vscore}, reason='{vreason}'", request_id)
 
             if batch_scores:
                 min_score = round(min(batch_scores), 2)

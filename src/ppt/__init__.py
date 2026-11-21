@@ -13,3 +13,4 @@ from .ppt_processor import (
     attempt_repair_xml,
     extract_text_from_shape
 )
+from .slide_alignment import align_slides, visual_slide_pairs

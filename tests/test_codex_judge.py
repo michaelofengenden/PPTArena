@@ -258,6 +258,19 @@ class SampleCacheTest(unittest.TestCase):
         valid, _ = jp.collect_samples(2, judge_once, None, "deck-a")
         self.assertEqual((len(valid), len(calls)), (2, 2))
 
+    def test_a_deck_that_will_not_open_scores_zero_without_leaking_the_local_path(self):
+        import judge_predictions as jp
+
+        deck = Path(self.tmp.name) / "case_080.pptx"
+        deck.write_bytes(b"")
+        case = {"name": "Case 80: Empty output", "category": ["Content"]}
+        row = jp.judge_case(case, deck, None, {}, "codex/gpt-6.2-sol", 1, "codex/gpt-6.2-sol",
+                            prediction_label="agent_bench/predictions/some_agent/case_080.pptx")
+        self.assertEqual((row["instruction_following_score"], row["visual_quality_score"]), ("0.00", "0.00"))
+        self.assertIn("Artifact prep error", row["errors"])
+        self.assertIn("agent_bench/predictions/some_agent/case_080.pptx", row["errors"])
+        self.assertNotIn(self.tmp.name, row["errors"])
+
     def test_a_codex_judge_is_not_mistaken_for_an_api_key_judge(self):
         import judge_predictions as jp
 

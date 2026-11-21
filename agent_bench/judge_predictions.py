@@ -287,7 +287,9 @@ def judge_case(case: dict, prediction_path: Path, artifacts_cache: CaseArtifacts
         # worth retrying, so find that out before any judge call.
         pred_json = pptx_to_json(str(prediction_path))
     except Exception as exc:  # noqa: BLE001
-        return zero_row(case, prediction_label, f"Artifact prep error: {exc}", judge_label)
+        # Name the deck by its place in the repo, not by where it sits on this machine.
+        reason = str(exc).replace(str(prediction_path), prediction_label)
+        return zero_row(case, prediction_label, f"Artifact prep error: {reason}", judge_label)
     valid, errors = collect_samples(samples, judge_once, cache_dir, deck_key)
     judge_time = round(time.time() - start, 3)
 

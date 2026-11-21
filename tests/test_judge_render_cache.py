@@ -36,5 +36,32 @@ class RenderCacheTest(unittest.TestCase):
         self.assertEqual(self.cached("Quarterly_Review.png"), ["Quarterly_Review.png"])
 
 
+class RenderConcurrencyTest(unittest.TestCase):
+    """LibreOffice runs one at a time unless PPT_RENDER_CONCURRENCY asks for more."""
+
+    def slots(self, env):
+        import importlib
+        from unittest import mock
+
+        from ppt import export
+        with mock.patch.dict("os.environ", env, clear=False):
+            importlib.reload(export)
+        self.addCleanup(importlib.reload, export)
+        taken = 0
+        while export._libreoffice_lock.acquire(blocking=False):
+            taken += 1
+        return taken
+
+    def test_one_render_at_a_time_by_default(self):
+        import os
+        from unittest import mock
+        with mock.patch.dict("os.environ"):
+            os.environ.pop("PPT_RENDER_CONCURRENCY", None)
+            self.assertEqual(self.slots({}), 1)
+
+    def test_more_renders_at_once_when_asked(self):
+        self.assertEqual(self.slots({"PPT_RENDER_CONCURRENCY": "3"}), 3)
+
+
 if __name__ == "__main__":
     unittest.main()

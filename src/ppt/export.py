@@ -7,9 +7,10 @@ from pathlib import Path
 import re
 import threading
 
-# A global lock to prevent concurrent LibreOffice executions,
-# which are known to crash on macOS with DeploymentException.
-_libreoffice_lock = threading.Lock()
+# LibreOffice runs one at a time by default, as concurrent runs have crashed on
+# macOS with DeploymentException. Each run gets its own profile folder, so several
+# at once can work: set PPT_RENDER_CONCURRENCY to allow that many.
+_libreoffice_lock = threading.BoundedSemaphore(max(1, int(os.environ.get("PPT_RENDER_CONCURRENCY", "1"))))
 
 def _run_soffice_with_retry(cmd, max_retries=3):
     import time

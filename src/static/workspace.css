@@ -1,0 +1,582 @@
+/* Live evaluation page. Tokens, base type, header and footer come from site.css. */
+
+.num {
+    font-variant-numeric: tabular-nums;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ---------- Page head ---------- */
+
+.ws {
+    padding-top: clamp(24px, 6vw, 56px);
+}
+
+.ws-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px 24px;
+}
+
+.ws-head h1 {
+    font-size: clamp(1.9rem, 4.6vw, 2.6rem);
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+}
+
+.ws-head .sub {
+    margin-top: 12px;
+    max-width: 60ch;
+    font-size: 1.05rem;
+    line-height: 1.45;
+    color: var(--ink-2);
+}
+
+.chip {
+    display: inline-flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-width: 100%;
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.chip b {
+    font-weight: 500;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+}
+
+/* ---------- API keys ---------- */
+
+details.keys {
+    margin-top: 24px;
+}
+
+details.keys summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 14px;
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink-2);
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+}
+
+details.keys summary::-webkit-details-marker {
+    display: none;
+}
+
+details.keys summary:hover,
+details.keys[open] summary {
+    color: var(--ink);
+    border-color: var(--ink-2);
+}
+
+details.keys summary:focus-visible {
+    border-radius: 999px;
+}
+
+details.keys .chev {
+    transition: transform .15s ease;
+}
+
+details.keys[open] .chev {
+    transform: rotate(180deg);
+}
+
+.keys-panel {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 16px;
+    max-width: 640px;
+    margin-top: 12px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.keys-panel .hint {
+    grid-column: 1 / -1;
+}
+
+/* ---------- Buttons and fields ---------- */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 9px 18px;
+    border: 1px solid var(--ink);
+    border-radius: 999px;
+    background: var(--ink);
+    color: var(--bg);
+    font: 500 14px/1.2 var(--font);
+    cursor: pointer;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.btn:hover {
+    background: var(--ink-2);
+    border-color: var(--ink-2);
+}
+
+.btn.outline {
+    background: var(--bg);
+    color: var(--ink);
+    border-color: var(--border-strong);
+}
+
+.btn.outline:hover {
+    background: var(--bg-subtle);
+    border-color: var(--ink-2);
+}
+
+.btn:focus-visible {
+    border-radius: 999px;
+}
+
+.btn:disabled {
+    opacity: .55;
+    cursor: default;
+}
+
+.field-label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-2);
+}
+
+.input {
+    width: 100%;
+    max-width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 14px/1.4 var(--font);
+    transition: border-color .15s ease;
+}
+
+.input::placeholder {
+    color: var(--faint);
+}
+
+.input:focus {
+    border-color: var(--ink-2);
+}
+
+.input:focus-visible {
+    border-radius: 8px;
+    outline-offset: 1px;
+}
+
+.hint {
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--muted);
+}
+
+/* ---------- The three steps ---------- */
+
+.ws-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    align-items: stretch;
+    margin-top: 24px;
+}
+
+.card {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+}
+
+.ws-card {
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+}
+
+.ws-card h3 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+}
+
+.step-no {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    background: var(--ink);
+    color: var(--bg);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.ws-card .body {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    gap: 14px;
+}
+
+.ws-card .actions {
+    display: grid;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.case-text {
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+.case-text b {
+    display: block;
+    margin-bottom: 3px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-2);
+}
+
+.case-text b.inline {
+    display: inline;
+    margin: 0;
+    font-size: inherit;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.clamp {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.check-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--ink-2);
+    cursor: pointer;
+}
+
+.check-row input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--ink);
+}
+
+.time-note {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--green);
+}
+
+/* ---------- Judge result ---------- */
+
+.judgement-container {
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-subtle);
+}
+
+.judge-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.judge-box {
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+}
+
+.judge-box-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+}
+
+.judge-box-score {
+    margin: 2px 0 4px;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.judge-box-reason,
+.judge-sub p {
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--muted);
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.judge-sub {
+    margin-top: 10px;
+}
+
+.judge-sub b {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-2);
+}
+
+/* ---------- Status and log ---------- */
+
+.status-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin: 28px 0 10px;
+}
+
+.status-row .label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.log-area {
+    min-height: 46px;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-subtle);
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+
+.log-line {
+    padding: 1.5px 0;
+    font-size: 12.5px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.msg {
+    margin-bottom: 6px;
+    padding: 9px 12px;
+    border: 1px solid;
+    border-radius: 6px;
+    font-size: 13.5px;
+}
+
+.msg-success {
+    color: var(--green);
+    border-color: color-mix(in srgb, var(--green) 35%, transparent);
+    background: color-mix(in srgb, var(--green) 7%, var(--bg));
+}
+
+.msg-error {
+    color: var(--red);
+    border-color: color-mix(in srgb, var(--red) 35%, transparent);
+    background: color-mix(in srgb, var(--red) 7%, var(--bg));
+}
+
+.msg-info,
+.msg-warning {
+    color: var(--amber);
+    border-color: color-mix(in srgb, var(--amber) 35%, transparent);
+    background: color-mix(in srgb, var(--amber) 7%, var(--bg));
+}
+
+.loader {
+    display: none;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--ink);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .loader {
+        animation-duration: 2s;
+    }
+}
+
+/* ---------- Deck viewers ---------- */
+
+.viewer {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.viewer-card {
+    overflow: hidden;
+}
+
+.viewer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    padding: 12px 16px;
+}
+
+.viewer-head h3 {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.viewer-tools {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.file-tag {
+    min-width: 0;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12.5px;
+    color: var(--muted);
+}
+
+.upload-link {
+    position: relative;
+    flex: none;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.upload-link:hover {
+    text-decoration-thickness: 2px;
+}
+
+.upload-link:has(input:focus-visible) {
+    outline: 2px solid var(--data);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+.pdf-viewer {
+    display: block;
+    width: 100%;
+    height: 540px;
+    border: 0;
+    border-top: 1px solid var(--border);
+    background: var(--bg-subtle);
+}
+
+div.pdf-viewer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    text-align: center;
+    font-size: 14px;
+    color: var(--muted);
+}
+
+/* ---------- Narrow screens ---------- */
+
+@media (max-width: 960px) {
+    .ws-grid,
+    .viewer {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .pdf-viewer {
+        height: 420px;
+    }
+}
+
+@media (max-width: 640px) {
+    .ws-head {
+        align-items: flex-start;
+    }
+
+    .keys-panel,
+    .judge-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .ws-card {
+        padding: 16px;
+    }
+
+    /* 16px stops iOS from zooming into a field on focus. */
+    .input {
+        font-size: 16px;
+    }
+
+    .pdf-viewer {
+        height: 360px;
+    }
+}

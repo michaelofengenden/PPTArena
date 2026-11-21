@@ -230,7 +230,7 @@ class LeaderboardScoringTests(unittest.TestCase):
             "prediction_pptx_name": "prediction.pptx",
             "is_prediction": False,
         }
-        template_module = environment.get_template("evaluation.html").make_module(template_context)
+        template_module = environment.get_template("_model_icon.html").make_module(template_context)
         icon_html = str(template_module.model_icon(entry))
 
         self.assertIn('title="Baidu DuMate"', icon_html)

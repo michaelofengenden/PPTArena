@@ -8,6 +8,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 import progress
 import llm_handler 
+import leaderboard_view
 import re 
 from pathlib import Path 
 import time
@@ -795,6 +796,25 @@ def get_leaderboard_data():
     }
 
 
+def get_case_scores():
+    """Per-case scores behind the leaderboard: ({split: [case names]}, {system name: {case name: score}})."""
+    case_meta, _ = _load_case_metadata()
+    all_cases = set(case_meta)
+    try:
+        subset_raw = json.loads((SCRIPT_DIR.parent / "agent_bench" / "subset25.json").read_text(encoding="utf-8"))
+        subset_cases = {n.strip() for n in subset_raw} & all_cases
+    except Exception:
+        subset_cases = set()
+    scores = {}
+    for source in LEADERBOARD_SOURCES:
+        scored, _ = _collect_source_scores(source)
+        scores[source["name"]] = {
+            row["case_name"]: round(_case_pct(row["if_score"], row["vq_score"]), 1)
+            for row in scored if row["case_name"] in all_cases
+        }
+    return {"subset": sorted(subset_cases), "full": sorted(all_cases)}, scores
+
+
 def build_evaluation_context(selected_pair_name=None, prediction_pptx_path=None):
     """Build the evaluation page context."""
     evaluation_pairs = get_evaluation_pairs()
@@ -858,16 +878,15 @@ def build_evaluation_context(selected_pair_name=None, prediction_pptx_path=None)
         is_prediction=is_prediction,
         public_gt_url=public_gt_url,
         public_pred_url=public_pred_url,
-        leaderboard_data=get_leaderboard_data()
     )
     return context, None
 
 @app.route('/app')
 def app_page():
-    """Legacy entry point; the site is evaluation-only now."""
+    """Legacy entry point: the leaderboard, or the live evaluation page when a case is selected."""
     args = request.args.to_dict(flat=True)
     args.pop('tab', None)
-    return redirect(url_for('evaluation_page', **args))
+    return redirect(url_for('workspace_page' if args else 'evaluation_page', **args))
 
 
 def get_evaluation_pairs():
@@ -880,13 +899,25 @@ def get_evaluation_pairs():
 
 @app.route('/evaluation', methods=['GET'])
 def evaluation_page():
-    """Render the evaluation workspace."""
+    """The leaderboard. Links that select a case belong to the live evaluation page."""
+    if request.args.get('pair') or request.args.get('prediction_pptx_path'):
+        return redirect(url_for('workspace_page', **request.args.to_dict(flat=True)))
+    splits = leaderboard_view.summarize(get_leaderboard_data())
+    cases_by_split, case_scores = get_case_scores()
+    for split in splits:
+        split["strip"] = leaderboard_view.case_strip(split["entries"], case_scores, cases_by_split[split["key"]])
+    return render_template('leaderboard.html', splits=splits, default_split='full')
+
+
+@app.route('/workspace', methods=['GET'])
+def workspace_page():
+    """Live evaluation: run one case through a model and the judge."""
     selected_pair_name = request.args.get('pair')
     prediction_path = request.args.get('prediction_pptx_path')
     context, error = build_evaluation_context(selected_pair_name, prediction_path)
     if error:
         return error, 500
-    return render_template('evaluation.html', active_tab='evaluation', **context)
+    return render_template('workspace.html', **context)
 
 
 @app.route('/evaluation/google944d95ae4c99977e.html', methods=['GET'])

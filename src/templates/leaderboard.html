@@ -1,0 +1,220 @@
+{% from "_model_icon.html" import model_icon %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-PBTH5F35HF"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-PBTH5F35HF');
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPTArena: LLM PowerPoint Editing Benchmark</title>
+    <meta name="description"
+        content="PPTArena is a benchmark for agentic PowerPoint editing: 100 real decks, 1,300+ paired edit instructions, scored on instruction following and visual quality by VLM judges.">
+    <link rel="icon"
+        href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23111827'/%3E%3Ctext x='16' y='22' font-family='Arial' font-size='17' font-weight='800' fill='white' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400..700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='site.css') }}">
+</head>
+
+<body>
+    <header class="wrap site-head">
+        <a class="wordmark" href="{{ url_for('evaluation_page') }}">PPTArena</a>
+        <nav class="site-nav" aria-label="Site">
+            <a href="{{ url_for('workspace_page') }}">Live evaluation</a>
+            <a href="https://arxiv.org/abs/2512.03042">Paper</a>
+            <a href="https://github.com/michaelofengenden/PPTArena">Code</a>
+            <a href="https://huggingface.co/datasets/mofengenden/PPTArena">Dataset</a>
+        </nav>
+    </header>
+
+    <main class="wrap">
+        <section class="intro">
+            <h1>The first benchmark for editing real PowerPoint decks.</h1>
+            <p class="lead">100 real decks, 2,125 slides and 1,300+ paired edits, each judged on instruction
+                following and visual quality.</p>
+            <p class="authors">Michael Ofengenden, Yunze Man, Ziqi Pang, Liang-Yan Gui, Yu-Xiong Wang</p>
+        </section>
+
+        <section id="leaderboard" aria-labelledby="leaderboard-title">
+            <div class="board-head">
+                <h2 id="leaderboard-title">Leaderboard</h2>
+                <div class="switch" role="tablist" aria-label="Case set">
+                    {% for split in splits|reverse %}
+                    <button type="button" role="tab" id="tab-{{ split.key }}" data-split="{{ split.key }}"
+                        aria-controls="panel-{{ split.key }}"
+                        aria-selected="{{ 'true' if split.key == default_split else 'false' }}">{{ split.label
+                        }}<span>{{ split.case_count }} cases</span></button>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {% for split in splits %}
+            <div class="split" id="panel-{{ split.key }}" role="tabpanel" aria-labelledby="tab-{{ split.key }}"
+                data-split-panel="{{ split.key }}" {% if split.key !=default_split %}hidden{% endif %}>
+                <table class="rank">
+                    <thead>
+                        <tr>
+                            <th class="pos" scope="col"><span class="vh">Rank</span></th>
+                            <th class="name" scope="col">System</th>
+                            <th class="score" scope="col"><button type="button" data-sort="score"
+                                    aria-pressed="true">Score</button></th>
+                            <th class="num" scope="col"><button type="button" data-sort="instruction"
+                                    aria-pressed="false">Instruction</button></th>
+                            <th class="num" scope="col"><button type="button" data-sort="visual"
+                                    aria-pressed="false">Visual</button></th>
+                            <th class="num time" scope="col"><button type="button" data-sort="time"
+                                    aria-pressed="false">Time per edit</button></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for e in split.entries %}
+                        <tr data-id="{{ e.id }}" data-name="{{ e.name }}" data-short="{{ e.short }}"
+                            data-score="{{ e.score }}" data-instruction="{{ e.instruction }}"
+                            data-visual="{{ e.visual }}"
+                            data-time="{{ '%.3f'|format(e.edit_minutes) if e.edit_minutes is not none else '' }}">
+                            <td class="pos">{{ e.rank }}</td>
+                            <th class="name" scope="row">
+                                <div class="who">{{ model_icon(e) }}<span>{{ e.name }}{% if e.note %}<small>{{
+                                            e.note }}</small>{% endif %}</span></div>
+                            </th>
+                            <td class="score">
+                                <div><span class="meter"><i style="width:{{ e.score }}%"></i></span><b>{{
+                                        '%.1f'|format(e.score) }}</b></div>
+                            </td>
+                            <td class="num">{{ '%.1f'|format(e.instruction) }}</td>
+                            <td class="num">{{ '%.1f'|format(e.visual) }}</td>
+                            <td class="num time">{{ e.edit_display }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <p class="foot-note">
+                    Score is the mean of instruction following and visual quality, each judged 0 to 5 per case and
+                    scaled to 100. Missing or unscored cases count as 0. Rows were judged in November 2026 by
+                    GPT-6.2 Sol (median of 3); the Baidu DuMate row keeps its earlier Kimi K2.6 judgement. Claude
+                    Code (Opus 5.5 max) and Codex (GPT-6.2 Astra) were run in November 2026; the other decks date
+                    from July 2026.
+                </p>
+
+                <div class="figs">
+                    <figure class="fig" data-chart="quality">
+                        <figcaption>
+                            <h3>Instruction following and visual quality</h3>
+                            <p>Each dot is a system. Below the line, a system scores lower on visual quality than on
+                                instruction following.</p>
+                        </figcaption>
+                        <div class="plot"></div>
+                    </figure>
+                    <figure class="fig" data-chart="speed">
+                        <figcaption>
+                            <h3>Score and time per edit</h3>
+                            <p>Mean minutes a system took to finish one edit, on a log scale. Systems without
+                                timing are left out.</p>
+                        </figcaption>
+                        <div class="plot"></div>
+                    </figure>
+                    <figure class="fig wide">
+                        <figcaption>
+                            <h3>Score by type of edit</h3>
+                            <p>The same score, split by what the edit asks for. A case can count toward two types.
+                            </p>
+                        </figcaption>
+                        <div class="scroll-x">
+                            <table class="heat">
+                                <thead>
+                                    <tr>
+                                        <td></td>
+                                        {% for c in split.categories %}
+                                        <th scope="col">{{ c.label }}<small>{{ c.case_count }} cases</small></th>
+                                        {% endfor %}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for e in split.entries %}
+                                    <tr data-id="{{ e.id }}">
+                                        <th scope="row">{{ e.name }}</th>
+                                        {% for v in e.category_scores %}
+                                        {% if v is none %}
+                                        <td class="none" title="Not scored"></td>
+                                        {% else %}
+                                        <td data-v="{{ v }}">{{ '%.0f'|format(v) }}</td>
+                                        {% endif %}
+                                        {% endfor %}
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </figure>
+                    <figure class="fig wide" data-strip>
+                        <figcaption>
+                            <h3>Every case, easiest to hardest</h3>
+                            <p>Each column is one case, ordered by its mean score across these systems. Darker is
+                                a higher score. A grey cell is a case with no scored deck.</p>
+                        </figcaption>
+                        <div class="strip"></div>
+                        <script type="application/json">{{ split.strip | tojson }}</script>
+                    </figure>
+                </div>
+            </div>
+            {% endfor %}
+        </section>
+
+        <section class="method" id="methodology" aria-labelledby="method-title">
+            <h2 id="method-title">Methodology</h2>
+            <div class="method-cols">
+                <div>
+                    <h3>Task suite</h3>
+                    <p>100 real-world decks with 2,125 slides and 1,300+ paired edit instructions. Every case ships
+                        the original deck, a natural-language instruction, and a human-made ground truth, spanning
+                        five edit categories.</p>
+                </div>
+                <div>
+                    <h3>Scoring</h3>
+                    <p>A VLM judge compares each prediction against the ground truth and scores instruction
+                        following and visual quality from 0 to 5. Each score is linearly converted to a percentage
+                        of available points, so 4/5 = 80% and 5/5 = 100%. A system's split score is the
+                        equal-weight mean across both metrics and all expected cases, with missing or unscored
+                        cases counted as 0.</p>
+                </div>
+                <div>
+                    <h3>Splits &amp; judges</h3>
+                    <p>The full set covers all 100 cases; the hard subset is a matched 25-case slice used for
+                        cost-sensitive agent comparisons. Rows are judged by GPT-6.2 Sol unless a row says
+                        otherwise, and every case can be re-run and re-judged in the
+                        <a href="{{ url_for('workspace_page') }}">live evaluation</a>.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="cite" aria-labelledby="cite-title">
+            <h2 id="cite-title">Citation</h2>
+            <div class="cite-box">
+                <button type="button" id="copyCitation">Copy</button>
+                <pre id="citationText">@article{ofengenden2025pptarena,
+  title   = {PPTArena: A Benchmark for PowerPoint Editing},
+  author  = {Ofengenden, Michael and Man, Yunze and Pang, Ziqi and Gui, Liang-Yan and Wang, Yu-Xiong},
+  journal = {arXiv preprint arXiv:2512.03042},
+  year    = {2025}
+}</pre>
+            </div>
+        </section>
+    </main>
+
+    <footer class="wrap site-foot">
+        <span>PPTArena. Michael Ofengenden, Yunze Man, Ziqi Pang, Liang-Yan Gui, Yu-Xiong Wang</span>
+        <span>Scores update as new runs land in the repo.</span>
+    </footer>
+
+    <script src="{{ url_for('static', filename='leaderboard.js') }}" defer></script>
+</body>
+
+</html>

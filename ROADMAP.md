@@ -71,7 +71,7 @@ Subset first (25 cases) for every new backbone; promote to full 100 only if the 
 2. Judge with the standard judge for that track (keep GPT-5.2 judge for subset comparability; record the judge string).
 3. Drop the per-case CSV/JSON in `src/benchmark_runs/` (columns must include `case_name` or `pair_name`, `instruction_following_score`, `visual_quality_score`).
 4. Add one entry to `LEADERBOARD_SOURCES` in `src/app.py` (path, name, model, provider, `brand`, color, split, expected_cases, judge).
-5. If it's a new brand, add an SVG branch to the `model_icon` macro in `src/templates/evaluation.html` (unknown brands automatically fall back to a colored monogram).
+5. If it's a new brand, add an SVG branch to the `model_icon` macro in `src/templates/_model_icon.html` (unknown brands automatically fall back to a colored monogram).
 
 Consistency rules: identical 25-case subset for all agents; both metrics from the same judge call; keep raw judge JSON alongside the CSV; one result file per system per split.
 

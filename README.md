@@ -27,7 +27,7 @@ The benchmark dataset is available on [Hugging Face](https://huggingface.co/data
 - **Multi-Modal Judge**: Automated evaluation using VLM-as-a-judge for both instruction following and visual quality.
 - **Comprehensive Benchmark**: Covers diverse tasks including text editing, chart manipulation, layout adjustments, and image handling.
 
-**Live leaderboard & webapp:** [ppt-arena.onrender.com/evaluation](https://ppt-arena.onrender.com/evaluation)
+**Live leaderboard:** [ppt-arena.onrender.com/evaluation](https://ppt-arena.onrender.com/evaluation) · **Live evaluation webapp:** [ppt-arena.onrender.com/workspace](https://ppt-arena.onrender.com/workspace)
 
 <div align="center">
 <img src="src/pptarenawebapp.png" alt="PPTArena Teaser" width="100%">

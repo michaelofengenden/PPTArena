@@ -1,6 +1,6 @@
 # agent_bench: CLI coding agents on PPTArena
 
-Scaffolding for running seven CLI coding agents across the PPTArena benchmark on a VM.
+Scaffolding for running nine CLI coding agents across the PPTArena benchmark on a VM.
 Generation and scoring are **decoupled**: the VM only generates predictions; judging
 can run later on any machine with the repo, LibreOffice and an API key for the judge
 model (Moonshot for the Kimi K2.6 judge the leaderboard uses).
@@ -14,9 +14,11 @@ model (Moonshot for the Kimi K2.6 judge the leaderboard uses).
 | `opencode_minimax_m3` | OpenCode | MiniMax-M3 |
 | `opencode_deepseek_v4` | OpenCode | DeepSeek V4 Pro |
 | `opencode_kimi_k27code` | OpenCode | Kimi K2.7 Code (Moonshot key under the `moonshotai` provider) |
+| `claude_code_opus55` | Claude Code | Opus 5.5, effort max (added November 2026) |
+| `codex_gpt62astra` | Codex CLI | GPT-6.2 Astra, reasoning effort xhigh (added November 2026) |
 
 Exact CLI flags and model ids live in [`agents.json`](agents.json). Tweak them there if a
-CLI has drifted; no code changes needed. Leaderboard entries for all seven are already
+CLI has drifted; no code changes needed. Leaderboard entries for all nine are already
 registered in `src/app.py`: rows appear automatically once result CSVs land in
 `agent_bench/results/`.
 
@@ -25,10 +27,12 @@ registered in `src/app.py`: rows appear automatically once result CSVs land in
 The leaderboard was not made with the script defaults. These are the settings it used.
 Set up the CLIs as in sections 1 and 2 first.
 
-The decks on the leaderboard were generated once, in July 2026. They have been judged
+Most decks on the leaderboard were generated once, in July 2026. They have been judged
 twice. The rows shown today were judged in November 2026 by GPT-6.2 Sol, after three
 judge bugs were fixed (see "Judge fixes" below). The first judgements, by Kimi K2.6,
-are still in the repo.
+are still in the repo. Two rows, Claude Code (Opus 5.5 max) and Codex (GPT-6.2 Astra),
+were generated in November 2026 under slightly different conditions; see "The November
+rows" below before comparing them with the July rows.
 
 The two sets of numbers are not comparable. On the Full Set the new scores are 5 to 16
 points higher than the July ones. Instruction following rose for every agent, by 11 to
@@ -40,8 +44,9 @@ through its theme instead of explicit cell fills, that the new judge accepts.
 CLI's Kimi CSV was replaced in 6f26a63, after its full run finished on July 6 2026. The
 runner is `run_agents.py` as of 96bc171; it has not changed since.
 
-**Generation.** All seven agents, with the flags in `agents.json`. One attempt per case,
-except that some failed cases were rerun; a CSV row holds the last attempt.
+**Generation (July 2026).** The first seven agents, with the flags in `agents.json`.
+One attempt per case, except that some failed cases were rerun; a CSV row holds the
+last attempt.
 
 ```bash
 # Hard subset (25 cases). The runner has no fixed-clock flag any more. Setting both
@@ -55,6 +60,42 @@ python3 agent_bench/run_agents.py --split subset --idle-timeout 1800 --max-timeo
 # 25 hard-subset decks are reused, as they were in the published run.
 python3 agent_bench/run_agents.py --split full --idle-timeout 1800 --max-timeout 5400
 ```
+
+**The November rows.** Claude Code (Opus 5.5, `--effort max`) and Codex (GPT-6.2 Astra,
+`model_reasoning_effort=xhigh`) were generated on November 21 2026, on a fresh Debian 12
+VM (8 vCPUs) with Claude Code 2.1.330, Codex CLI 0.171.0, python-pptx 0.6.23 and
+LibreOffice 25.2.3.
+
+```bash
+python3 agent_bench/run_until_done.py --agents codex_gpt62astra --split subset --parallel 3
+python3 agent_bench/run_until_done.py --agents codex_gpt62astra --split full --parallel 3
+python3 agent_bench/run_until_done.py --agents claude_code_opus55 --split subset --parallel 4
+python3 agent_bench/run_until_done.py --agents claude_code_opus55 --split full --parallel 6
+```
+
+`run_until_done.py` calls `run_agents.py` with `--idle-timeout 1800 --max-timeout 5400`
+and runs a case again only if its session died because the plan ran out of usage or
+lost its login. That never happened in this run. What differs from the July rows:
+
+- The hard subset ran under the full-set limits (idle watchdog 1800 s, cap 5400 s), not
+  under the fixed 2400 s wall clock.
+- One attempt per case, with one exception: Opus 5.5 Case 89 ran twice. Claude Code in
+  plain `-p` mode prints nothing until it is done, so the idle watchdog killed the first
+  attempt at 1800 s while it was still working. From then on this agent ran with
+  `--output-format stream-json --verbose`, which lets the watchdog see progress. The 24
+  hard-subset decks made before that change all finished in under 1800 s (longest:
+  1484 s). The July Opus 4.8 run was never near that limit (longest: 676 s).
+- Case 90 was given its new wording (replace slide 12 in place).
+- All 100 Opus 5.5 sessions returned an edited deck. Astra returned 99; on Case 99 it
+  left the deck unchanged because the instruction refers to a video file that the case
+  does not include. That unchanged deck is judged like any other.
+- The VM held the original decks and the case list cut down to name, prompt, category
+  and original path, so no ground truth and no rubrics. The agents did have network
+  access, and the ground truth is public in this repo. We searched every session log
+  and Claude Code transcript for access to it and found none. One Astra session
+  (Case 99) listed this repo's files on GitHub while looking for the missing video.
+- Ground truth and both agents' decks were rendered on that same VM after generation
+  had finished, then judged like the other rows.
 
 **Judging (the rows shown today).** GPT-6.2 Sol, three samples per case, per-metric
 median. The judge runs through the Codex CLI on a ChatGPT plan, so it needs `codex`
@@ -84,7 +125,9 @@ machines: a Mac, and for the samples still missing on 191 decks a Debian 12 VM r
 `render_decks.py` with the same LibreOffice version and the Liberation, DejaVu, Noto,
 Carlito and Caladea fonts. Within one sample the ground truth and the prediction always
 come from the same machine, so fonts are the same on both sides of a comparison. The
-first judgements in July were rendered on the Linux VM that ran the agents.
+two November rows were rendered, ground truth included, on the VM that generated them,
+which has the same LibreOffice version and fonts as the Debian render VM. The first
+judgements in July were rendered on the Linux VM that ran the agents.
 
 **Judging (the first time, July 2026).** Kimi K2.6, three samples per case, per-metric
 median. Needs `MOONSHOT_API_KEY` in `credentials.env`. A second judge, Qwen3.7 Plus, was
@@ -119,18 +162,21 @@ in the denominator.
 - Full set, July 5 2026: idle watchdog, so a session is killed after 1800 s with no new
   output, plus `--max-timeout 5400`. Gemini CLI's full run was finished on July 6 with
   `--max-timeout 3600`; none of its final attempts timed out.
+- Both splits of the two November rows: idle watchdog 1800 s plus `--max-timeout 5400`.
 - A killed session's deck is not collected, even if the agent had already edited it.
   That case scores 0.
 
 **Sampling.** No temperature or top_p is set anywhere for the agents or the judges, so
 each uses its CLI's or provider's defaults. The agent CLIs get only the flags in
-`agents.json` (Codex also has `model_reasoning_effort=xhigh`). The Kimi and Qwen judges
+`agents.json` (Codex also has `model_reasoning_effort=xhigh`, and Claude Code with
+Opus 5.5 has `--effort max`). The Kimi and Qwen judges
 ran with thinking or reasoning disabled; the GPT-6.2 Sol judge runs at reasoning effort
 `low`. Runs are not deterministic. The median of three judge samples narrows the spread
 but does not remove it.
 
-**CLI versions** were not pinned. `run_agents.py --check` prints each CLI's version;
-record it with your run.
+**CLI versions** were not pinned and were not recorded for the July runs. The November
+rows used Claude Code 2.1.330 and Codex CLI 0.171.0. `run_agents.py --check` prints each
+CLI's version; record it with your run.
 
 **Other rows.** The leaderboard also shows Baidu DuMate and three computer-use agents.
 Their decks were made outside this runner. The computer-use decks were judged again
@@ -150,8 +196,8 @@ not directly comparable with the rows around it.
   not judged again, so its Kimi and Qwen CSVs score different decks.
 - Case 90's instruction used to say "recreate this screenshot as a new, fully editable
   slide", which Claude Code and Codex read as a request to add a slide. It now says to
-  replace slide 12 in place. The decks on the leaderboard were generated with the old
-  wording.
+  replace slide 12 in place. The July decks were generated with the old wording, the
+  two November rows with the new one.
 - The Baidu DuMate row is still judged by Kimi K2.6 (see "Other rows").
 - Four collected decks are empty files and score 0: DeepSeek V4 Pro cases 80, 83 and
   85, and MiniMax-M3 case 80.
@@ -226,7 +272,7 @@ and fix the `-m` value in `agents.json`.
 # One case through one agent, watch it work:
 python3 agent_bench/run_agents.py --agents codex_gpt55 --limit 1
 
-# 25-case hard subset (the default split), all seven agents, five processes at a time:
+# 25-case hard subset (the default split), every agent in agents.json, five processes at a time:
 nohup python3 agent_bench/run_agents.py --parallel 5 > agent_bench/run.log 2>&1 &
 tail -f agent_bench/run.log
 
@@ -239,6 +285,15 @@ nohup python3 agent_bench/run_agents.py --split full --parallel 5 > agent_bench/
   or `idle_timeout_seconds` in `agents.json`). `--max-timeout` adds an absolute cap;
   there is none by default. The `timeout_seconds` field in `agents.json` belongs to
   the old fixed-clock runner and is no longer read.
+- **Subscription plans**: a session that dies because the plan ran out of usage, or
+  lost its login, leaves an untouched or half-edited deck that the runner would
+  collect. `run_until_done.py --agents A,B --split full` wraps the runner: after each
+  batch it finds those sessions by the end of their log, deletes their decks, waits
+  25 minutes and runs the batch again. Ordinary failures and timeouts are left alone.
+- **Claude Code and the idle watchdog**: `claude -p` prints nothing until the session
+  ends, so the watchdog cannot tell a long session from a stuck one. Add
+  `--output-format stream-json --verbose` to the agent's flags, as `claude_code_opus55`
+  has, when sessions can run longer than the idle limit.
 - **Resume-safe**: re-running skips any (agent, case) that already has a prediction;
   `--force` regenerates. This holds across splits, so `--split full` after a subset
   run only does the other 75 cases.
@@ -307,7 +362,7 @@ judge's own work on each deck is single-core, so to go faster run one
 `judge_predictions.py` process per agent rather than raising `--max-workers`.
 
 Speed notes: ground-truth renders/JSON/XML are computed once per case and cached
-(`benchmark_outputs/judge_render_cache/`), then shared across all seven agents and
+(`benchmark_outputs/judge_render_cache/`), then shared across all agents and
 re-runs. Only prediction decks are rendered per judgement. `--samples 3` is what the
 leaderboard uses.
 

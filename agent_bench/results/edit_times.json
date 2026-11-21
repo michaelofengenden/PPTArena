@@ -61,5 +61,19 @@
     "median_s": null,
     "max_s": null,
     "source": "gen_csv"
+  },
+  "claude_code_opus55": {
+    "n": 100,
+    "mean_s": 609.1,
+    "median_s": 552.1,
+    "max_s": 1904.6,
+    "source": "manifest"
+  },
+  "codex_gpt62astra": {
+    "n": 99,
+    "mean_s": 133.1,
+    "median_s": 104.1,
+    "max_s": 566.8,
+    "source": "manifest"
   }
 }

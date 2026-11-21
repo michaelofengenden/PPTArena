@@ -27,7 +27,7 @@ OUT = BENCH / "results" / "edit_times.json"
 
 # CLI/OpenCode agents timed via the run manifest.
 MANIFEST_AGENTS = [
-    "codex_gpt55", "claude_code_opus48", "gemini_cli_35flash",
+    "codex_gpt55", "claude_code_opus48", "claude_code_opus55", "codex_gpt62astra", "gemini_cli_35flash",
     "opencode_glm52", "opencode_minimax_m3", "opencode_deepseek_v4",
     "opencode_kimi_k27code",
 ]

@@ -123,5 +123,48 @@
     ],
     "timeout_seconds": 2400,
     "auth_hint": "Moonshot platform key registered under the `moonshotai` provider (not `kimi-for-coding`); confirm with `opencode models | grep -i moonshot`."
+  },
+  "claude_code_opus55": {
+    "display_name": "Claude Code (Opus 5.5 max effort)",
+    "run": [
+      "env",
+      "IS_SANDBOX=1",
+      "claude",
+      "-p",
+      "{prompt}",
+      "--model",
+      "claude-opus-5-5",
+      "--effort",
+      "max",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--dangerously-skip-permissions"
+    ],
+    "check": [
+      "claude",
+      "--version"
+    ],
+    "timeout_seconds": 2400,
+    "auth_hint": "Run `claude` once and `/login` with the Max-plan account (or `claude setup-token`)."
+  },
+  "codex_gpt62astra": {
+    "display_name": "Codex (GPT-6.2 Astra xhigh)",
+    "run": [
+      "codex",
+      "exec",
+      "--dangerously-bypass-approvals-and-sandbox",
+      "-m",
+      "gpt-6.2-astra",
+      "-c",
+      "model_reasoning_effort=xhigh",
+      "{prompt}"
+    ],
+    "check": [
+      "codex",
+      "--version"
+    ],
+    "timeout_seconds": 2400,
+    "auth_hint": "Run `codex login` (ChatGPT account). Verify the model id with `codex exec -m gpt-6.2-astra 'say ok'`."
   }
 }

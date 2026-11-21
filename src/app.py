@@ -251,6 +251,9 @@ LEADERBOARD_SOURCES = [
     # Pre-registered sources: each entry appears on the leaderboard automatically
     # once its judged CSV lands in agent_bench/results/. The Codex run defines
     # the canonical matched subset (subset25).
+    # Rows here are judged by GPT-6.2 Sol (median of 3) with slides matched by
+    # content. The earlier Kimi K2.6 judgements stay next to them as
+    # <id>_judge_results.csv.
     {
         "name": "Codex (GPT-5.5 xhigh)",
         "model": "GPT-5.5 xhigh",
@@ -261,8 +264,8 @@ LEADERBOARD_SOURCES = [
         "chart_label": "GPT-5.5",
         "split": "subset",
         "expected_cases": 25,
-        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "codex_gpt55_judge_results.csv",
-        "judge": "Kimi K2.6 judge",
+        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "codex_gpt55_gpt62sol_judge_results.csv",
+        "judge": "GPT-6.2 Sol judge",
         "defines_subset": True,
     },
     {
@@ -275,8 +278,8 @@ LEADERBOARD_SOURCES = [
         "chart_label": "Claude 4.8",
         "split": "subset",
         "expected_cases": 25,
-        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "claude_code_opus48_judge_results.csv",
-        "judge": "Kimi K2.6 judge",
+        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "claude_code_opus48_gpt62sol_judge_results.csv",
+        "judge": "GPT-6.2 Sol judge",
         "defines_subset": False,
     },
     {
@@ -289,8 +292,8 @@ LEADERBOARD_SOURCES = [
         "chart_label": "GLM-5.2",
         "split": "subset",
         "expected_cases": 25,
-        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "opencode_glm52_judge_results.csv",
-        "judge": "Kimi K2.6 judge",
+        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "opencode_glm52_gpt62sol_judge_results.csv",
+        "judge": "GPT-6.2 Sol judge",
         "defines_subset": False,
     },
     {
@@ -303,8 +306,8 @@ LEADERBOARD_SOURCES = [
         "chart_label": "Gemini 3.5",
         "split": "subset",
         "expected_cases": 25,
-        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "gemini_cli_35flash_judge_results.csv",
-        "judge": "Kimi K2.6 judge",
+        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "gemini_cli_35flash_gpt62sol_judge_results.csv",
+        "judge": "GPT-6.2 Sol judge",
         "defines_subset": False,
     },
     {
@@ -317,8 +320,8 @@ LEADERBOARD_SOURCES = [
         "chart_label": "MiniMax-M3",
         "split": "subset",
         "expected_cases": 25,
-        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "opencode_minimax_m3_judge_results.csv",
-        "judge": "Kimi K2.6 judge",
+        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "opencode_minimax_m3_gpt62sol_judge_results.csv",
+        "judge": "GPT-6.2 Sol judge",
         "defines_subset": False,
     },
     {
@@ -331,8 +334,8 @@ LEADERBOARD_SOURCES = [
         "chart_label": "DeepSeek V4",
         "split": "subset",
         "expected_cases": 25,
-        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "opencode_deepseek_v4_judge_results.csv",
-        "judge": "Kimi K2.6 judge",
+        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "opencode_deepseek_v4_gpt62sol_judge_results.csv",
+        "judge": "GPT-6.2 Sol judge",
         "defines_subset": False,
     },
     {
@@ -345,8 +348,8 @@ LEADERBOARD_SOURCES = [
         "chart_label": "Kimi K2.7",
         "split": "subset",
         "expected_cases": 25,
-        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "opencode_kimi_k27code_judge_results.csv",
-        "judge": "Kimi K2.6 judge",
+        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "opencode_kimi_k27code_gpt62sol_judge_results.csv",
+        "judge": "GPT-6.2 Sol judge",
         "defines_subset": False,
     },
     # --- External full-set agents ---
@@ -367,8 +370,8 @@ LEADERBOARD_SOURCES = [
     # (PPTPilot Kimi/Gemma pilot rows removed from the board — scored too low to
     # be informative; their CSVs remain in agent_bench/results/ if ever restored.)
     # --- CUA (computer-use agent) cohort ---
-    # Product agents driving a browser/desktop rather than a CLI; judged in an
-    # earlier era, labels kept truthful. None redefine the canonical subset.
+    # Product agents driving a browser/desktop rather than a CLI. None redefine
+    # the canonical subset.
     {
         "name": "Claude (CUA)",
         "model": "Claude 3.7 Sonnet",
@@ -379,8 +382,8 @@ LEADERBOARD_SOURCES = [
         "chart_label": "Claude CUA",
         "split": "subset",
         "expected_cases": 25,
-        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "cua_claude37_judge_results.csv",
-        "judge": "Kimi K2.6 judge",
+        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "cua_claude37_gpt62sol_judge_results.csv",
+        "judge": "GPT-6.2 Sol judge",
         "defines_subset": False,
         "subset_only": True,
     },
@@ -394,8 +397,8 @@ LEADERBOARD_SOURCES = [
         "chart_label": "ChatGPT CUA",
         "split": "subset",
         "expected_cases": 25,
-        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "cua_chatgpt_agent_judge_results.csv",
-        "judge": "Kimi K2.6 judge",
+        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "cua_chatgpt_agent_gpt62sol_judge_results.csv",
+        "judge": "GPT-6.2 Sol judge",
         "defines_subset": False,
         "subset_only": True,
     },
@@ -409,8 +412,8 @@ LEADERBOARD_SOURCES = [
         "chart_label": "MiniMax CUA",
         "split": "subset",
         "expected_cases": 25,
-        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "cua_minimax_agent_judge_results.csv",
-        "judge": "Kimi K2.6 judge",
+        "path": SCRIPT_DIR.parent / "agent_bench" / "results" / "cua_minimax_agent_gpt62sol_judge_results.csv",
+        "judge": "GPT-6.2 Sol judge",
         "defines_subset": False,
         "subset_only": True,
     },
@@ -596,7 +599,11 @@ def _edit_time_key(source):
     p = source.get("path")
     if not p:
         return None
-    return Path(p).name.replace("_qwen_judge_results.csv", "").replace("_judge_results.csv", "")
+    name = Path(p).name
+    for suffix in ("_gpt62sol_judge_results.csv", "_qwen_judge_results.csv", "_judge_results.csv"):
+        if name.endswith(suffix):
+            return name[: -len(suffix)]
+    return name
 
 
 def _fmt_edit_time(seconds):

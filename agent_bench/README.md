@@ -25,6 +25,17 @@ registered in `src/app.py`: rows appear automatically once result CSVs land in
 The leaderboard was not made with the script defaults. These are the settings it used.
 Set up the CLIs as in sections 1 and 2 first.
 
+The decks on the leaderboard were generated once, in July 2026. They have been judged
+twice. The rows shown today were judged in November 2026 by GPT-6.2 Sol, after three
+judge bugs were fixed (see "Judge fixes" below). The first judgements, by Kimi K2.6,
+are still in the repo.
+
+The two sets of numbers are not comparable. On the Full Set the new scores are 5 to 16
+points higher than the July ones. Instruction following rose for every agent, by 11 to
+19 points, and visual quality moved both ways. In the largest disagreements we read,
+the July judge had marked down harmless structural differences, such as a table styled
+through its theme instead of explicit cell fills, that the new judge accepts.
+
 **Commits.** The result CSVs in `agent_bench/results/` were committed in 012bdd1. Gemini
 CLI's Kimi CSV was replaced in 6f26a63, after its full run finished on July 6 2026. The
 runner is `run_agents.py` as of 96bc171; it has not changed since.
@@ -45,9 +56,39 @@ python3 agent_bench/run_agents.py --split subset --idle-timeout 1800 --max-timeo
 python3 agent_bench/run_agents.py --split full --idle-timeout 1800 --max-timeout 5400
 ```
 
-**Judging.** Kimi K2.6, three samples per case, per-metric median. Needs
-`MOONSHOT_API_KEY` in `credentials.env`. A second judge, Qwen3.7 Plus, was run only to
-check agreement. It needs `OPENROUTER_API_KEY`.
+**Judging (the rows shown today).** GPT-6.2 Sol, three samples per case, per-metric
+median. The judge runs through the Codex CLI on a ChatGPT plan, so it needs `codex`
+installed and logged in and no API key. A judge id of the form `codex/<model>` selects
+this route (`src/llm/codex_judge.py`).
+
+```bash
+# A Codex home that holds nothing but the login, so no personal AGENTS.md, config,
+# hooks or memories reach the judge.
+mkdir -p ~/codex-judge-home && ln -s ~/.codex/auth.json ~/codex-judge-home/auth.json
+export PPTARENA_CODEX_HOME=~/codex-judge-home
+
+python3 agent_bench/judge_predictions.py --split full --judge-model codex/gpt-6.2-sol --samples 3 \
+  --csv-suffix _gpt62sol_judge_results.csv --no-resume \
+  --sample-cache benchmark_outputs/judge_samples/gpt62sol
+```
+
+Each judge call is one fresh `codex exec` run: read-only, no saved session, reasoning
+effort `low` (the model's default), with the same prompts the Kimi judge receives.
+Every judged sample is kept in the `--sample-cache` folder, so the same command picks up
+where it stopped if the plan's usage limit interrupts it. The three computer-use rows
+use `--split subset`. Results are in `<agent_id>_gpt62sol_judge_results.csv`.
+
+**Rendering.** The judge compares slide images made with LibreOffice 25.2.3 and
+poppler's `pdftoppm`. For the GPT-6.2 Sol judgement the slides were rendered on two
+machines: a Mac, and for the samples still missing on 191 decks a Debian 12 VM running
+`render_decks.py` with the same LibreOffice version and the Liberation, DejaVu, Noto,
+Carlito and Caladea fonts. Within one sample the ground truth and the prediction always
+come from the same machine, so fonts are the same on both sides of a comparison. The
+first judgements in July were rendered on the Linux VM that ran the agents.
+
+**Judging (the first time, July 2026).** Kimi K2.6, three samples per case, per-metric
+median. Needs `MOONSHOT_API_KEY` in `credentials.env`. A second judge, Qwen3.7 Plus, was
+run only to check agreement. It needs `OPENROUTER_API_KEY`.
 
 ```bash
 python3 agent_bench/judge_predictions.py --split full --judge-model kimi-k2.6 --samples 3
@@ -55,11 +96,14 @@ python3 agent_bench/judge_predictions.py --split full --judge-model qwen/qwen3.7
   --csv-suffix _qwen_judge_results.csv
 ```
 
+Those results are in `<agent_id>_judge_results.csv` and
+`<agent_id>_qwen_judge_results.csv`. They were made before the judge fixes below, so
+running these commands today will not reproduce them.
+
 For the hard subset alone, use `--split subset`. The leaderboard builds both views from
 the same 100-row CSV per agent; the Hard Subset view keeps the 25 cases in
 `subset25.json`. In 012bdd1 every row was judged again, hard-subset rows included. Pass
-`--no-resume` to do the same instead of appending to an existing CSV. Only the Kimi
-CSVs (`<agent_id>_judge_results.csv`) are shown on the leaderboard.
+`--no-resume` to do the same instead of appending to an existing CSV.
 
 **Score.** Per case: the mean of IF/5 and VQ/5, as a percentage (`_case_pct` in
 `src/app.py`; each metric is clamped to 0 to 5). The split score averages that over
@@ -78,18 +122,21 @@ in the denominator.
 - A killed session's deck is not collected, even if the agent had already edited it.
   That case scores 0.
 
-**Sampling.** No temperature or top_p is set anywhere for the agents or for the Kimi and
-Qwen judges, so each uses its CLI's or provider's defaults. The agent CLIs get only the
-flags in `agents.json` (Codex also has `model_reasoning_effort=xhigh`). Both judges run
-with thinking or reasoning disabled. Runs are not deterministic. The median of three
-judge samples narrows the spread but does not remove it.
+**Sampling.** No temperature or top_p is set anywhere for the agents or the judges, so
+each uses its CLI's or provider's defaults. The agent CLIs get only the flags in
+`agents.json` (Codex also has `model_reasoning_effort=xhigh`). The Kimi and Qwen judges
+ran with thinking or reasoning disabled; the GPT-6.2 Sol judge runs at reasoning effort
+`low`. Runs are not deterministic. The median of three judge samples narrows the spread
+but does not remove it.
 
 **CLI versions** were not pinned. `run_agents.py --check` prints each CLI's version;
 record it with your run.
 
 **Other rows.** The leaderboard also shows Baidu DuMate and three computer-use agents.
-Their decks were made outside this runner. Their CSVs use the same Kimi K2.6
-median-of-3 judge.
+Their decks were made outside this runner. The computer-use decks were judged again
+with GPT-6.2 Sol like the rest. The Baidu DuMate decks are not in this repo's
+predictions folder, so that row still shows its Kimi K2.6 median-of-3 judgement and is
+not directly comparable with the rows around it.
 
 ### Known gaps
 
@@ -103,24 +150,44 @@ median-of-3 judge.
   not judged again, so its Kimi and Qwen CSVs score different decks.
 - Case 90's instruction used to say "recreate this screenshot as a new, fully editable
   slide", which Claude Code and Codex read as a request to add a slide. It now says to
-  replace slide 12 in place. The published Case 90 scores were produced with the old
+  replace slide 12 in place. The decks on the leaderboard were generated with the old
   wording.
+- The Baidu DuMate row is still judged by Kimi K2.6 (see "Other rows").
+- Four collected decks are empty files and score 0: DeepSeek V4 Pro cases 80, 83 and
+  85, and MiniMax-M3 case 80.
+- LibreOffice cannot open the ChatGPT Agent (CUA) deck for Case 87, so no slides are
+  rendered and its visual score is 0. Its instruction score is judged as usual.
 
-### Slide matching
+### Judge fixes
 
-The published scores were judged while both judges compared slide i with slide i. A
-prediction that inserted or dropped a slide made every later slide look changed, and
-slides past the end of the shorter deck were never shown to the visual judge.
+Three bugs affected the first (Kimi and Qwen) judgements. All three are fixed, and the
+GPT-6.2 Sol rows were judged after the fixes.
 
-The judge now pairs slides by content first (`src/ppt/slide_alignment.py`). An extra or
-missing slide is reported once, and the remaining slides are compared with their real
-counterparts. Decks whose slides already line up are judged exactly as before: the
-requests sent to the judge are byte-identical.
+**A copy of slide 1 in cached ground-truth renders.** Slides are rendered through
+LibreOffice. Its direct PNG export writes only slide 1, named after the deck, and the
+per-slide images come from a PDF fallback in the same folder. A fresh render returned
+only the per-slide images. A cached render returned every PNG in the folder, so for 99
+of the 100 cases the visual judge saw the ground truth with a copy of slide 1 at the
+front and every later slide shifted by one. Any judging process that started after a
+case's ground truth was first cached was affected, which covers most of the first
+judgements. The Kimi reasons show it: several describe a "duplicate title slide" in the
+ground truth or a prediction slide that "matches Ground Truth slide 3" one position
+later. `render_cached` in `judge_predictions.py` now returns only the real slides.
 
-Among the published decks this changes the comparison for Case 43 (six of the seven CLI
-agents placed a section divider one slide off) and Case 90 (Claude Code and Codex added
-a 13th slide), plus Cases 12, 28 and 97 for two of the computer-use rows. Those
-published scores still come from the old comparison.
+**Failed judge calls scored as 0.** When the visual judge call failed, the case kept its
+instruction score and got a visual score of 0 with no error recorded. 19 rows in the
+first judgements look like this (visual score 0.00, empty reason). A failed call is now
+reported as an error and that sample is judged again rather than counted.
+
+**Slides compared by position.** Both judges compared slide i with slide i. A prediction
+that inserted or dropped a slide made every later slide look changed, and slides past
+the end of the shorter deck were never shown to the visual judge. The judge now pairs
+slides by content first (`src/ppt/slide_alignment.py`). An extra or missing slide is
+reported once, and the remaining slides are compared with their real counterparts.
+Decks whose slides already line up are judged as before. Among the leaderboard decks
+this changes the comparison for Case 43 (six of the seven CLI agents placed a section
+divider one slide off) and Case 90 (Claude Code and Codex added a 13th slide), plus
+Cases 12, 28 and 97 for two of the computer-use rows.
 
 ## 1. VM setup
 
@@ -204,17 +271,40 @@ nohup python3 agent_bench/run_agents.py --split full --parallel 5 > agent_bench/
 ## 4. Score later (any machine with the repo)
 
 Judging defaults to **Gemini 3.5 Flash** with one sample. The published leaderboard
-used Kimi K2.6 with three samples instead (see "Reproducing the published leaderboard"
-above). Needs `credentials.env` at the repo root (environment variables of the same
-name also work) with the judge's key: `MOONSHOT_API_KEY` for `kimi-*`,
+uses GPT-6.2 Sol with three samples instead (see "Reproducing the published
+leaderboard" above). Needs `credentials.env` at the repo root (environment variables of
+the same name also work) with the judge's key: `MOONSHOT_API_KEY` for `kimi-*`,
 `OPENROUTER_API_KEY` for `qwen/*`, `GEMINI_API_KEY` for `gemini-*`, or `OPENAI_API_KEY`
-for `gpt-*`. Also needs LibreOffice installed (slide rendering).
+for `gpt-*`. A `codex/<model>` judge needs no key, only the Codex CLI logged in to a
+ChatGPT plan. Also needs LibreOffice installed (slide rendering).
 
 ```bash
 python3 agent_bench/judge_predictions.py --agents all              # single-sample
 python3 agent_bench/judge_predictions.py --agents all --samples 3  # median of 3 (steadier)
-python3 agent_bench/judge_predictions.py --split full --judge-model kimi-k2.6 --samples 3  # published setting
+python3 agent_bench/judge_predictions.py --split full --judge-model codex/gpt-6.2-sol --samples 3 \
+  --csv-suffix _gpt62sol_judge_results.csv                         # published setting
 ```
+
+`--predictions-root` reads the decks from another folder. `--sample-cache` keeps each
+judged sample on disk so an interrupted run can pick up where it stopped.
+
+Rendering is the heavy part and can run on another machine. Copy `render_decks.py` to a
+Linux box with LibreOffice and poppler, render there, copy the output folder back, and
+judge from it:
+
+```bash
+# On the render machine. in/gt/<case_slug>.pptx and in/pred/<agent_id>/<case_slug>.pptx
+python3 render_decks.py in out --jobs 8
+
+# On the judging machine, with LibreOffice never started here
+python3 agent_bench/judge_predictions.py --split full --judge-model codex/gpt-6.2-sol --samples 3 \
+  --render-cache out --no-local-render
+```
+
+Render ground truth and predictions on the same machine. When rendering locally,
+`PPT_RENDER_CONCURRENCY=4` lets four LibreOffice runs go at once (default: one). The
+judge's own work on each deck is single-core, so to go faster run one
+`judge_predictions.py` process per agent rather than raising `--max-workers`.
 
 Speed notes: ground-truth renders/JSON/XML are computed once per case and cached
 (`benchmark_outputs/judge_render_cache/`), then shared across all seven agents and

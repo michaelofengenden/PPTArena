@@ -28,6 +28,7 @@ from llm.utils import (
     _is_openrouter_model,
     _log
 )
+from llm.codex_judge import create_codex_client, is_codex_model, codex_model_name
 from utils.image_utils import (
     _pil_from_b64,
     _resize_for_metric,
@@ -65,8 +66,11 @@ def call_llm_judge(
     if not judge_model:
         judge_model = "gemini-3-pro-preview"
 
-    use_openrouter = _is_openrouter_model(judge_model)
-    use_kimi = (_is_kimi_model(judge_model) and not use_openrouter) or use_openrouter
+    # codex/<model> ids are answered by the Codex CLI on a ChatGPT plan. They go
+    # down the OpenAI-compatible chat path, so they get the same prompts as Kimi.
+    use_codex = is_codex_model(judge_model)
+    use_openrouter = _is_openrouter_model(judge_model) and not use_codex
+    use_kimi = use_codex or (_is_kimi_model(judge_model) and not use_openrouter) or use_openrouter
     use_openai = _is_openai_model(judge_model) and not use_kimi
     openai_client = None
     kimi_client = None  # OpenAI-compatible client: Moonshot or OpenRouter
@@ -88,7 +92,11 @@ def call_llm_judge(
         else:
             api_key = api_keys.get("gemini") or api_keys.get("gemini_api_key")
 
-    if use_openai:
+    if use_codex:
+        kimi_client = create_codex_client()
+        if kimi_client is None:
+            return {"error": "codex CLI not found; codex/* judges need it installed and logged in."}
+    elif use_openai:
         openai_client = _create_openai_client(api_key)
         if openai_client is None:
             return {"error": "OpenAI API key for judging not found."}
@@ -124,11 +132,13 @@ def call_llm_judge(
 
     # Request model id: strip an explicit "openrouter/" prefix if present.
     _compat_model = judge_model.split("openrouter/", 1)[-1] if judge_model.lower().startswith("openrouter/") else judge_model
+    if use_codex:
+        _compat_model = codex_model_name(judge_model)
     # Moonshot accepts a thinking toggle; OpenRouter exposes a unified
     # reasoning switch. Judges should answer, not deliberate for minutes.
     if use_openrouter:
         _compat_extra = {"reasoning": {"enabled": False}}
-    elif _is_kimi_model(judge_model):
+    elif _is_kimi_model(judge_model) and not use_codex:
         _compat_extra = {"thinking": {"type": "disabled"}}
     else:
         _compat_extra = None
@@ -823,6 +833,15 @@ Return only:
     try:
         instr = _judge_instruction_with_json()
         vis = _judge_visual_with_images()
+
+        # A judge call that died returns an error and no score. Report that as a
+        # failed judgement so the caller can retry it, rather than scoring it 0.
+        failed = [
+            part["error"] for part in (instr, vis)
+            if part.get("error") and not any(key.endswith("_score") for key in part)
+        ]
+        if failed:
+            return {"error": " | ".join(failed)}
 
         judge_result = {
             "instruction_following_score": instr.get("instruction_following_score", 0),

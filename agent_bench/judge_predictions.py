@@ -36,6 +36,7 @@ from __future__ import annotations
 import argparse
 import base64
 import csv
+import hashlib
 import json
 import re
 import statistics
@@ -52,6 +53,7 @@ SRC_DIR = PROJECT_ROOT / "src"
 sys.path.insert(0, str(SRC_DIR))
 
 import llm_handler  # noqa: E402
+from llm import codex_judge  # noqa: E402
 from ppt import (  # noqa: E402
     export_slides_to_images,
     extract_specific_xml_from_pptx,
@@ -104,9 +106,14 @@ def is_kimi_judge(model_id: str) -> bool:
     return "kimi" in lower or "moonshot" in lower
 
 
+def is_codex_judge(model_id: str) -> bool:
+    """codex/<model> ids run through the Codex CLI on a ChatGPT plan, with no API key."""
+    return codex_judge.is_codex_model(model_id)
+
+
 def is_openai_judge(model_id: str) -> bool:
     lower = (model_id or "").lower()
-    if is_kimi_judge(lower):
+    if is_kimi_judge(lower) or is_codex_judge(lower):
         return False
     return any(tok in lower for tok in ("gpt", "openai", "o1", "o3", "o4"))
 
@@ -216,37 +223,76 @@ def call_judge_once(case: dict, artifacts: dict, pred_json: dict, pred_b64: list
     )
 
 
-def judge_case(case: dict, prediction_path: Path, artifacts_cache: CaseArtifacts,
-               api_keys: dict, judge_model: str, samples: int, judge_label: str) -> dict:
-    try:
-        artifacts = artifacts_cache.get(case)
-        pred_json = pptx_to_json(str(prediction_path))
-        with tempfile.TemporaryDirectory() as tmpdir:
-            pred_imgs = export_slides_to_images(str(prediction_path), str(Path(tmpdir) / "pred"))
-            pred_b64 = [b for b in (image_to_base64(p) for p in pred_imgs) if b]
-        pred_xml = extract_specific_xml_from_pptx(str(prediction_path), "ppt/slides/slide1.xml") or ""
-    except Exception as exc:
-        return zero_row(case, prediction_path, f"Artifact prep error: {exc}", judge_label)
+def collect_samples(sample_count: int, judge_once, cache_dir: Path | None = None,
+                    cache_key: str = "") -> tuple[list[dict], list[str]]:
+    """Judge a deck sample_count times and return (valid responses, error messages).
 
-    start = time.time()
+    With a cache folder, each valid response is written to disk as soon as it
+    arrives and read back on later runs, so an interrupted batch resumes without
+    paying for the same judgement twice. Failed samples are never stored. A stored
+    sample is ignored when cache_key (the deck's fingerprint) has changed.
+    """
     valid: list[dict] = []
     errors: list[str] = []
-    for _ in range(samples):
+    for index in range(sample_count):
+        sample_path = cache_dir / f"sample_{index + 1}.json" if cache_dir else None
+        if sample_path and sample_path.exists():
+            try:
+                stored = json.loads(sample_path.read_text(encoding="utf-8"))
+            except ValueError:
+                stored = {}
+            if stored.get("key") == cache_key and isinstance(stored.get("response"), dict):
+                valid.append(stored["response"])
+                continue
         try:
-            response = call_judge_once(case, artifacts, pred_json, pred_b64, pred_xml,
-                                       api_keys, judge_model)
+            response = judge_once()
         except Exception as exc:  # noqa: BLE001
             errors.append(f"Judge call failed: {exc}")
             continue
         if isinstance(response, dict) and not response.get("error"):
             valid.append(response)
+            if sample_path:
+                sample_path.parent.mkdir(parents=True, exist_ok=True)
+                sample_path.write_text(json.dumps({"key": cache_key, "response": response}, indent=2),
+                                       encoding="utf-8")
         else:
             errors.append(response.get("error", "Invalid judge response.")
                           if isinstance(response, dict) else "Invalid judge response.")
+    return valid, errors
+
+
+def judge_case(case: dict, prediction_path: Path, artifacts_cache: CaseArtifacts,
+               api_keys: dict, judge_model: str, samples: int, judge_label: str,
+               cache_dir: Path | None = None, prediction_label: str | None = None) -> dict:
+    prediction_label = prediction_label or str(prediction_path)
+    inputs: dict = {}
+
+    def judge_once() -> dict:
+        # Rendering happens on the first sample that really needs judging, so a
+        # deck whose samples are all on disk costs nothing.
+        if not inputs:
+            artifacts = artifacts_cache.get(case)
+            with tempfile.TemporaryDirectory() as tmpdir:
+                pred_imgs = export_slides_to_images(str(prediction_path), str(Path(tmpdir) / "pred"))
+                pred_b64 = [b for b in (image_to_base64(p) for p in pred_imgs) if b]
+            pred_xml = extract_specific_xml_from_pptx(str(prediction_path), "ppt/slides/slide1.xml") or ""
+            inputs.update(artifacts=artifacts, pred_b64=pred_b64, pred_xml=pred_xml)
+        return call_judge_once(case, inputs["artifacts"], pred_json, inputs["pred_b64"],
+                               inputs["pred_xml"], api_keys, judge_model)
+
+    start = time.time()
+    try:
+        deck_key = hashlib.sha1(prediction_path.read_bytes()).hexdigest()
+        # A deck that will not open is a zero for the agent, not a judge failure
+        # worth retrying, so find that out before any judge call.
+        pred_json = pptx_to_json(str(prediction_path))
+    except Exception as exc:  # noqa: BLE001
+        return zero_row(case, prediction_label, f"Artifact prep error: {exc}", judge_label)
+    valid, errors = collect_samples(samples, judge_once, cache_dir, deck_key)
     judge_time = round(time.time() - start, 3)
 
     if not valid:
-        row = zero_row(case, prediction_path, " | ".join(errors) or "No valid judge response.", judge_label)
+        row = zero_row(case, prediction_label, " | ".join(errors) or "No valid judge response.", judge_label)
         row["judge_time_seconds"] = f"{judge_time:.3f}"
         return row
 
@@ -265,7 +311,7 @@ def judge_case(case: dict, prediction_path: Path, artifacts_cache: CaseArtifacts
         "case_index": extract_case_index(case["name"]),
         "case_name": case["name"],
         "category": normalize_category(case.get("category")),
-        "prediction": str(prediction_path),
+        "prediction": prediction_label,
         "instruction_following_score": f"{if_final:.2f}",
         "visual_quality_score": f"{vq_final:.2f}",
         "instruction_following_reason": (representative.get("instruction_following_reason") or "").strip()
@@ -281,7 +327,9 @@ def judge_case(case: dict, prediction_path: Path, artifacts_cache: CaseArtifacts
 def judge_agent(agent_id: str, cases: list[dict], artifacts_cache: CaseArtifacts,
                 api_keys: dict, judge_model: str, samples: int,
                 max_workers: int, resume: bool,
-                suffix: str = "_judge_results.csv") -> None:
+                suffix: str = "_judge_results.csv",
+                predictions_root: Path = PREDICTIONS_ROOT,
+                sample_cache: Path | None = None) -> None:
     judge_label = judge_model if samples == 1 else f"{judge_model} (median of {samples})"
     output_path = RESULTS_ROOT / f"{agent_id}{suffix}"
     RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
@@ -310,11 +358,18 @@ def judge_agent(agent_id: str, cases: list[dict], artifacts_cache: CaseArtifacts
               f"VQ {row['visual_quality_score']}  ({agent_id})"
               + (f"  !! {row['errors']}" if row["errors"] else ""))
 
-    def work(case: dict) -> dict:
-        prediction = PREDICTIONS_ROOT / agent_id / f"{slugify(case['name'])}.pptx"
+    def work(case: dict) -> dict | None:
+        slug = slugify(case["name"])
+        prediction = predictions_root / agent_id / f"{slug}.pptx"
+        # The CSV names the deck by its place in the repo, whatever folder it was read from.
+        label = f"agent_bench/predictions/{agent_id}/{slug}.pptx"
         if not prediction.exists():
-            return zero_row(case, prediction, "Prediction PPTX missing for this case.", judge_label)
-        return judge_case(case, prediction, artifacts_cache, api_keys, judge_model, samples, judge_label)
+            return zero_row(case, label, "Prediction PPTX missing for this case.", judge_label)
+        if codex_judge.usage_limit_hit.is_set():
+            return None
+        cache_dir = sample_cache / agent_id / slug if sample_cache else None
+        return judge_case(case, prediction, artifacts_cache, api_keys, judge_model, samples,
+                          judge_label, cache_dir=cache_dir, prediction_label=label)
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {pool.submit(work, case): case for case in todo}
@@ -324,7 +379,23 @@ def judge_agent(agent_id: str, cases: list[dict], artifacts_cache: CaseArtifacts
                 row = future.result()
             except Exception as exc:  # noqa: BLE001
                 row = zero_row(case, None, f"Unhandled judge exception: {exc}", judge_label)
+            # Once the plan limit is hit, a case that did not finish cleanly is left
+            # out of the CSV so the next run judges it instead of keeping a false 0.
+            if row is None or (codex_judge.usage_limit_hit.is_set() and row["errors"]):
+                continue
             emit(row)
+
+    with output_path.open(newline="", encoding="utf-8") as fh:
+        rows = sorted(csv.DictReader(fh), key=lambda r: int(r["case_index"]))
+    with output_path.open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.DictWriter(fh, fieldnames=CSV_FIELDS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    if codex_judge.usage_limit_hit.is_set():
+        sys.exit(f"\nStopped: the Codex plan hit its usage limit while judging {agent_id}. "
+                 f"{len(rows)} of {len(cases)} rows are in {output_path.name}. "
+                 "Run the same command again once the limit resets.")
 
 
 def main() -> None:
@@ -341,6 +412,12 @@ def main() -> None:
                         help="Concurrent judge calls per agent (default: 6).")
     parser.add_argument("--no-resume", action="store_true",
                         help="Rewrite result CSVs from scratch instead of appending missing cases.")
+    parser.add_argument("--predictions-root", type=Path, default=PREDICTIONS_ROOT,
+                        help="Folder holding <agent_id>/<case_slug>.pptx (default: agent_bench/predictions).")
+    parser.add_argument("--sample-cache", type=Path, default=None,
+                        help="Folder to keep each judged sample in. A rerun with the same folder "
+                             "only judges what is missing, which suits --no-resume after an "
+                             "interrupted or rate-limited run. Use one folder per judge.")
     parser.add_argument("--csv-suffix", default="_judge_results.csv",
                         help="Result filename suffix — use a distinct one per judge for "
                              "agreement studies (e.g. '_qwen_judge_results.csv').")
@@ -353,7 +430,7 @@ def main() -> None:
     # Accept any id with a predictions directory, so non-CLI systems (e.g.
     # PPTPilot runs collected via run_xml_loop_subsample --collect-dir) can be
     # judged through the same pipeline without an agents.json entry.
-    unknown = [a for a in agent_ids if a not in agents and not (PREDICTIONS_ROOT / a).is_dir()]
+    unknown = [a for a in agent_ids if a not in agents and not (args.predictions_root / a).is_dir()]
     if unknown:
         sys.exit(f"Unknown agent id(s): {', '.join(unknown)}. Known: {', '.join(agents)}")
 
@@ -366,7 +443,10 @@ def main() -> None:
     pairs.sort(key=lambda c: extract_case_index(c["name"]))
 
     keys = llm_handler.load_api_keys()
-    if is_openrouter_judge(args.judge_model):
+    if is_codex_judge(args.judge_model):
+        if codex_judge.create_codex_client() is None:
+            sys.exit("codex CLI not found; codex/* judges need it installed and logged in.")
+    elif is_openrouter_judge(args.judge_model):
         if not (keys.get("openrouter") or keys.get("openrouter_api_key")):
             sys.exit("OPENROUTER_API_KEY missing from credentials.env; required for OpenRouter judges.")
     elif is_kimi_judge(args.judge_model):
@@ -382,7 +462,14 @@ def main() -> None:
     for agent_id in agent_ids:
         judge_agent(agent_id, pairs, artifacts_cache, keys, args.judge_model,
                     args.samples, args.max_workers, resume=not args.no_resume,
-                    suffix=args.csv_suffix)
+                    suffix=args.csv_suffix, predictions_root=args.predictions_root,
+                    sample_cache=args.sample_cache)
+
+    if codex_judge.usage_totals["runs"]:
+        totals = codex_judge.usage_totals
+        print(f"\nCodex judge usage this run: {totals['runs']} calls, "
+              f"{totals['input_tokens']:,} input tokens ({totals['cached_input_tokens']:,} cached), "
+              f"{totals['output_tokens']:,} output tokens.")
 
     print("\nAll done. Result CSVs are in agent_bench/results/ — commit them and the "
           "leaderboard rows appear automatically (sources pre-registered in src/app.py).")

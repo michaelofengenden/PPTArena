@@ -1,6 +1,6 @@
 # agent_bench: CLI coding agents on PPTArena
 
-Scaffolding for running nine CLI coding agents across the PPTArena benchmark on a VM.
+Scaffolding for running ten CLI coding agents across the PPTArena benchmark on a VM.
 Generation and scoring are **decoupled**: the VM only generates predictions; judging
 can run later on any machine with the repo, LibreOffice and an API key for the judge
 model (Moonshot for the Kimi K2.6 judge the leaderboard uses).
@@ -16,9 +16,10 @@ model (Moonshot for the Kimi K2.6 judge the leaderboard uses).
 | `opencode_kimi_k27code` | OpenCode | Kimi K2.7 Code (Moonshot key under the `moonshotai` provider) |
 | `claude_code_opus55` | Claude Code | Opus 5.5, effort max (added November 2026) |
 | `codex_gpt62astra` | Codex CLI | GPT-6.2 Astra, reasoning effort xhigh (added November 2026) |
+| `agy_gemini4_neon` | Antigravity CLI | Gemini 4 Neon, effort xhigh (added November 2026) |
 
 Exact CLI flags and model ids live in [`agents.json`](agents.json). Tweak them there if a
-CLI has drifted; no code changes needed. Leaderboard entries for all nine are already
+CLI has drifted; no code changes needed. Leaderboard entries for all ten are already
 registered in `src/app.py`: rows appear automatically once result CSVs land in
 `agent_bench/results/`.
 
@@ -30,9 +31,10 @@ Set up the CLIs as in sections 1 and 2 first.
 Most decks on the leaderboard were generated once, in July 2026. They have been judged
 twice. The rows shown today were judged in November 2026 by GPT-6.2 Sol, after three
 judge bugs were fixed (see "Judge fixes" below). The first judgements, by Kimi K2.6,
-are still in the repo. Two rows, Claude Code (Opus 5.5 max) and Codex (GPT-6.2 Astra),
-were generated in November 2026 under slightly different conditions; see "The November
-rows" below before comparing them with the July rows.
+are still in the repo. Three rows, Claude Code (Opus 5.5 max), Codex (GPT-6.2 Astra) and
+the Antigravity CLI (Gemini 4 Neon xhigh), were generated in November 2026 under slightly
+different conditions; see "The November rows" below before comparing them with the July
+rows.
 
 The two sets of numbers are not comparable. On the Full Set the new scores are 5 to 16
 points higher than the July ones. Instruction following rose for every agent, by 11 to
@@ -97,6 +99,38 @@ lost its login. That never happened in this run. What differs from the July rows
 - Ground truth and both agents' decks were rendered on that same VM after generation
   had finished, then judged like the other rows.
 
+The Antigravity CLI row (Gemini 4 Neon, model id `gemini-4-neon-xhigh`; the effort is
+part of the id) was generated on November 22 2026, on another fresh Debian 12 VM
+(8 vCPUs) with Antigravity CLI 1.5.14, python-pptx 0.6.23 and LibreOffice 25.2.3, signed
+in to a Google subscription.
+
+```bash
+python3 agent_bench/run_until_done.py --agents agy_gemini4_neon --split subset --parallel 5
+python3 agent_bench/run_until_done.py --agents agy_gemini4_neon --split full --parallel 5
+```
+
+Same limits as the two rows above, and one attempt per case. Case 6 was made first, as
+a single test session with the same flags, and kept. No session hit a plan limit or
+lost its login. All 100 ended with the CLI's `SUCCESS` result and an edited deck; the
+longest took 1398 s. What is particular to this row:
+
+- Every session ran with a home folder of its own (`fresh_home` in `agents.json`). The
+  CLI keeps knowledge and conversation summaries under `HOME` and reads them in later
+  sessions, so a shared home would let one case inform the next. The fresh home holds
+  only the login and a `settings.json` with `{"useG1Credits": false}`, which keeps the
+  CLI from spending paid credits when the plan's quota runs out.
+- Neon used the web. It ran 300 searches across 12 cases, for OOXML references and for
+  facts on content cases (Case 50 checked the date of an agreement, Case 89 looked up
+  animal facts). No query names the benchmark, this repo or a dataset, and it opened
+  no pages and no browser. Case 91 installed two QR code packages from PyPI.
+- On Cases 56, 77 and 78 Neon had the CLI's image tool make pictures, through five
+  helper sessions that ran on Gemini 4 Hydrogen.
+- The VM again held only the original decks and the cut-down case list. We searched
+  every session log and full transcript for the ground truth, this repo, the dataset
+  hub and the leaderboard site and found none. One session (Case 91) came across the
+  runner's copy of its own original deck while looking for QR libraries.
+- Ground truth and Neon's decks were rendered on that VM after generation had finished.
+
 **Judging (the rows shown today).** GPT-6.2 Sol, three samples per case, per-metric
 median. The judge runs through the Codex CLI on a ChatGPT plan, so it needs `codex`
 installed and logged in and no API key. A judge id of the form `codex/<model>` selects
@@ -125,8 +159,8 @@ machines: a Mac, and for the samples still missing on 191 decks a Debian 12 VM r
 `render_decks.py` with the same LibreOffice version and the Liberation, DejaVu, Noto,
 Carlito and Caladea fonts. Within one sample the ground truth and the prediction always
 come from the same machine, so fonts are the same on both sides of a comparison. The
-two November rows were rendered, ground truth included, on the VM that generated them,
-which has the same LibreOffice version and fonts as the Debian render VM. The first
+three November rows were rendered, ground truth included, on the VMs that generated
+them, which have the same LibreOffice version and fonts as the Debian render VM. The first
 judgements in July were rendered on the Linux VM that ran the agents.
 
 **Judging (the first time, July 2026).** Kimi K2.6, three samples per case, per-metric
@@ -162,21 +196,22 @@ in the denominator.
 - Full set, July 5 2026: idle watchdog, so a session is killed after 1800 s with no new
   output, plus `--max-timeout 5400`. Gemini CLI's full run was finished on July 6 with
   `--max-timeout 3600`; none of its final attempts timed out.
-- Both splits of the two November rows: idle watchdog 1800 s plus `--max-timeout 5400`.
+- Both splits of the three November rows: idle watchdog 1800 s plus `--max-timeout 5400`.
 - A killed session's deck is not collected, even if the agent had already edited it.
   That case scores 0.
 
 **Sampling.** No temperature or top_p is set anywhere for the agents or the judges, so
 each uses its CLI's or provider's defaults. The agent CLIs get only the flags in
-`agents.json` (Codex also has `model_reasoning_effort=xhigh`, and Claude Code with
-Opus 5.5 has `--effort max`). The Kimi and Qwen judges
+`agents.json` (Codex also has `model_reasoning_effort=xhigh`, Claude Code with
+Opus 5.5 has `--effort max`, and the Antigravity CLI takes its effort from the model id
+`gemini-4-neon-xhigh`). The Kimi and Qwen judges
 ran with thinking or reasoning disabled; the GPT-6.2 Sol judge runs at reasoning effort
 `low`. Runs are not deterministic. The median of three judge samples narrows the spread
 but does not remove it.
 
 **CLI versions** were not pinned and were not recorded for the July runs. The November
-rows used Claude Code 2.1.330 and Codex CLI 0.171.0. `run_agents.py --check` prints each
-CLI's version; record it with your run.
+rows used Claude Code 2.1.330, Codex CLI 0.171.0 and Antigravity CLI 1.5.14.
+`run_agents.py --check` prints each CLI's version; record it with your run.
 
 **Other rows.** The leaderboard also shows Baidu DuMate and three computer-use agents.
 Their decks were made outside this runner. The computer-use decks were judged again
@@ -290,6 +325,17 @@ nohup python3 agent_bench/run_agents.py --split full --parallel 5 > agent_bench/
   collect. `run_until_done.py --agents A,B --split full` wraps the runner: after each
   batch it finds those sessions by the end of their log, deletes their decks, waits
   25 minutes and runs the batch again. Ordinary failures and timeouts are left alone.
+- **A home folder per session**: an agent that lists `fresh_home` in `agents.json` runs
+  every case with `HOME` set to an empty folder under
+  `~/agent_bench_workdirs/_homes/`, holding only the listed files copied from the real
+  home. Use it for a CLI that carries memory from one session to the next, as the
+  Antigravity CLI does. The copied files (the login) are removed when the session
+  ends; the session's own records stay. Tools the agent needs, such as python-pptx,
+  must then be installed system-wide, not under the real home.
+- **Antigravity CLI**: keep `AGY_CLI_DISABLE_AUTO_UPDATE=true` in its run command, or the
+  CLI updates itself in the middle of a run. Its stream-json log ends with a `result` event;
+  `run_until_done.py` reads that event to tell a plan or login failure from a normal
+  end.
 - **Claude Code and the idle watchdog**: `claude -p` prints nothing until the session
   ends, so the watchdog cannot tell a long session from a stuck one. Add
   `--output-format stream-json --verbose` to the agent's flags, as `claude_code_opus55`

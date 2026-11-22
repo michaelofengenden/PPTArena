@@ -156,6 +156,29 @@ def build_command(agent: dict, prompt: str) -> list[str]:
     return [arg.replace("{prompt}", prompt) for arg in agent["run"]]
 
 
+def fresh_home(seed_files: list[str], home: Path, real_home: Path) -> Path:
+    """An empty HOME for one session, holding only the listed files copied from the real one.
+
+    The Antigravity CLI keeps knowledge and conversation summaries under HOME and reads them
+    in later sessions. A home of its own keeps every case independent of the others.
+    """
+    if home.exists():
+        shutil.rmtree(home)
+    home.mkdir(parents=True)
+    for rel in seed_files:
+        source = real_home / rel
+        if source.exists():
+            (home / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, home / rel)
+    return home
+
+
+def remove_seed(seed_files: list[str], home: Path) -> None:
+    """Take the copied files (the login) back out once the session is over; its records stay."""
+    for rel in seed_files:
+        (home / rel).unlink(missing_ok=True)
+
+
 def run_task(task: Task, manifest_lock: Lock, manifest_path: Path, verbose: bool,
              idle_limit: int | None = None, max_timeout: int | None = None) -> str:
     original_path = (PROJECT_ROOT / task.case["original"]).resolve()
@@ -205,6 +228,10 @@ def run_task(task: Task, manifest_lock: Lock, manifest_path: Path, verbose: bool
             if real_auth.exists():
                 shutil.copy2(real_auth, xdg / "opencode" / "auth.json")
             env["XDG_DATA_HOME"] = str(xdg)
+        seed_files = task.agent.get("fresh_home")
+        session_home = WORKDIRS_ROOT / "_homes" / task.agent_id / task.slug
+        if seed_files is not None:
+            env["HOME"] = str(fresh_home(seed_files, session_home, Path.home()))
         log_path = task.workdir / "agent_output.log"
         # No fixed wall-clock cap: a model gets as long as it needs, as long as
         # it keeps making progress. We poll the output log and only abort if it
@@ -262,6 +289,9 @@ def run_task(task: Task, manifest_lock: Lock, manifest_path: Path, verbose: bool
         except FileNotFoundError:
             notes.append(f"CLI not found: {command[0]}")
             exit_code = None
+        finally:
+            if seed_files is not None:
+                remove_seed(seed_files, session_home)
 
         duration = round(time.time() - started, 1)
 

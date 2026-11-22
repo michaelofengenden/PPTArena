@@ -17,32 +17,44 @@ HERE = Path(__file__).resolve().parent
 WORKDIRS = Path.home() / "agent_bench_workdirs"
 PRED = HERE / "predictions"
 LIMIT = re.compile(r"usage limit|hit your limit|limit reached|limit will reset|rate.?limit|too many requests|"
-                   r"\b429\b|quota|overloaded|failed to authenticate|oauth|invalid api key|\b401\b|"
-                   r"not logged in|please run /login|credit balance", re.I)
+                   r"\b429\b|quota|resource.?exhausted|overloaded|failed to authenticate|authentication required|"
+                   r"oauth|invalid api key|\b401\b|not logged in|please run /login|credit balance", re.I)
 
 
 def plan_failure(log_text):
     """The plan or login error a session log ends with, or "" if it shows none.
 
     A plain log (Codex, OpenCode, Gemini) is judged by its last 3000 characters. A
-    stream-json log (Claude Code with `--output-format stream-json`) is full of deck XML
-    from tool calls, where a bare 401 or 429 means nothing, so only its closing `result`
-    event counts, and only when that event is an error.
+    stream-json log (Claude Code or the Antigravity CLI with `--output-format stream-json`)
+    is full of deck XML from tool calls, where a bare 401 or 429 means nothing, so only
+    its closing `result` event counts, and only when that event reports a failure. A
+    stream-json session that never reached a `result` event is judged by what the CLI
+    printed after its last event.
     """
-    events = [line for line in log_text.splitlines() if line.startswith("{")]
-    if events:
-        closing = ""
-        for line in reversed(events):
-            try:
-                event = json.loads(line)
-            except ValueError:
-                continue
-            if isinstance(event, dict) and event.get("type") == "result":
-                closing = str(event.get("result") or "") if event.get("is_error") else ""
-                break
-        match = LIMIT.search(closing)
-    else:
+    lines = log_text.splitlines()
+    event_rows = [i for i, line in enumerate(lines) if line.startswith("{")]
+    if not event_rows:
         match = LIMIT.search(log_text[-3000:])
+        return match.group(0) if match else ""
+    closing = None
+    for i in reversed(event_rows):
+        try:
+            event = json.loads(lines[i])
+        except ValueError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        if event.get("type") == "result":  # Claude Code
+            closing = str(event.get("result") or "") if event.get("is_error") else ""
+            break
+        if event.get("event") == "result":  # Antigravity CLI
+            result = event.get("result")
+            succeeded = isinstance(result, dict) and result.get("status") == "SUCCESS"
+            closing = "" if succeeded else json.dumps(result)
+            break
+    if closing is None:
+        closing = "\n".join(lines[event_rows[-1] + 1:])[-3000:]
+    match = LIMIT.search(closing)
     return match.group(0) if match else ""
 
 

@@ -166,5 +166,30 @@
     ],
     "timeout_seconds": 2400,
     "auth_hint": "Run `codex login` (ChatGPT account). Verify the model id with `codex exec -m gpt-6.2-astra 'say ok'`."
+  },
+  "agy_gemini4_neon": {
+    "display_name": "Antigravity CLI (Gemini 4 Neon xhigh)",
+    "run": [
+      "env",
+      "AGY_CLI_DISABLE_AUTO_UPDATE=true",
+      "agy",
+      "-p",
+      "{prompt}",
+      "--model",
+      "gemini-4-neon-xhigh",
+      "--dangerously-skip-permissions",
+      "--output-format",
+      "stream-json"
+    ],
+    "check": [
+      "agy",
+      "--version"
+    ],
+    "timeout_seconds": 2400,
+    "fresh_home": [
+      ".gemini/antigravity-cli/antigravity-oauth-token",
+      ".gemini/antigravity-cli/settings.json"
+    ],
+    "auth_hint": "Run `agy` once and sign in with the Google account (over SSH it prints a link and takes a code). On Linux the login is the file ~/.gemini/antigravity-cli/antigravity-oauth-token."
   }
 }

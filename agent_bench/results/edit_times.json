@@ -75,5 +75,12 @@
     "median_s": 104.1,
     "max_s": 566.8,
     "source": "manifest"
+  },
+  "agy_gemini4_neon": {
+    "n": 100,
+    "mean_s": 445.8,
+    "median_s": 417.4,
+    "max_s": 1397.7,
+    "source": "manifest"
   }
 }

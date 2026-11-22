@@ -1,4 +1,4 @@
-{% from "_model_icon.html" import model_icon %}
+{% from "_model_icon.html" import model_icon, model_icon_sprite %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -25,6 +25,7 @@
 </head>
 
 <body>
+    {{ model_icon_sprite() }}
     <header class="wrap site-head">
         <a class="wordmark" href="{{ url_for('evaluation_page') }}">PPTArena</a>
         <nav class="site-nav" aria-label="Site">

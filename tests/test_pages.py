@@ -59,6 +59,18 @@ class PagesTest(unittest.TestCase):
             for height, score in zip(heights, scores):
                 self.assertAlmostEqual(height, 100 * score / max(scores), places=1)
 
+    def test_every_ranked_system_shows_its_real_brand_mark_not_a_drawing_or_a_letter(self):
+        page = self.get("/evaluation").get_data(as_text=True)
+        for mark in ("openai", "claude", "gemini", "kimi", "minimax", "deepseek", "zai"):
+            self.assertIn(f'<symbol id="mi-{mark}"', page)       # drawn once per page
+            self.assertIn(f'href="#mi-{mark}"', page)             # and used by the rows
+        claude = page.split('<symbol id="mi-claude"')[1].split("</symbol>")[0]
+        self.assertIn('d="M4.709 15.955l4.72-2.647', claude)      # Anthropic's own outline of the spark
+        self.assertIn('fill="#D97757"', claude)
+        board = page.split('id="leaderboard"')[1].split('id="methodology"')[0]
+        self.assertNotIn("<text", board)                          # no letter standing in for a logo
+        self.assertEqual(board.count("dumate-icon.png"), 2 * 2)   # Baidu's icon: bar and row, in both splits
+
     def test_leaderboard_carries_per_case_scores_for_each_split(self):
         page = self.get("/evaluation").get_data(as_text=True)
         self.assertEqual(page.count('<script type="application/json">'), 2)

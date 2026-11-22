@@ -3,6 +3,7 @@ import contextlib
 import html
 import io
 import os
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -45,6 +46,18 @@ class PagesTest(unittest.TestCase):
             self.assertGreater(len(split["entries"]), 0)
             for entry in split["entries"]:
                 self.assertIn(entry["name"], page)
+
+    def test_leaderboard_draws_one_vertical_bar_per_system_scaled_to_the_best_score(self):
+        page = self.get("/evaluation").get_data(as_text=True)
+        self.assertNotIn('class="meter"', page)             # the horizontal score bars are gone
+        for split in self.view.summarize(self.app.get_leaderboard_data()):
+            panel = page.split(f'data-split-panel="{split["key"]}"')[1].split("data-split-panel=")[0]
+            heights = [float(h) for h in re.findall(r'class="bar" style="height:([\d.]+)%"', panel)]
+            scores = [entry["score"] for entry in split["entries"]]
+            self.assertEqual(len(heights), len(scores))
+            self.assertEqual(max(heights), 100.0)
+            for height, score in zip(heights, scores):
+                self.assertAlmostEqual(height, 100 * score / max(scores), places=1)
 
     def test_leaderboard_carries_per_case_scores_for_each_split(self):
         page = self.get("/evaluation").get_data(as_text=True)

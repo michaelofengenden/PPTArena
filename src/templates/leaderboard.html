@@ -59,6 +59,19 @@
             {% for split in splits %}
             <div class="split" id="panel-{{ split.key }}" role="tabpanel" aria-labelledby="tab-{{ split.key }}"
                 data-split-panel="{{ split.key }}" {% if split.key !=default_split %}hidden{% endif %}>
+                <figure class="bars" style="--n:{{ split.entries|length }}">
+                    <figcaption class="vh">Score of each system on the {{ split.label }}, best first</figcaption>
+                    <ol>
+                        {% for e in split.entries %}
+                        <li data-id="{{ e.id }}" tabindex="0"
+                            aria-label="{{ e.name }}: score {{ '%.1f'|format(e.score) }}, instruction {{ '%.1f'|format(e.instruction) }}, visual {{ '%.1f'|format(e.visual) }}">
+                            <div class="col"><b><span>{{ '%.1f'|format(e.score) }}</span><span>{{
+                                        (e.score + 0.5)|int }}</span></b><i class="bar" style="height:{{ '%.2f'|format(e.bar) }}%"></i></div>
+                            <div class="tag">{{ model_icon(e) }}<span>{{ e.short }}</span></div>
+                        </li>
+                        {% endfor %}
+                    </ol>
+                </figure>
                 <table class="rank">
                     <thead>
                         <tr>
@@ -85,10 +98,7 @@
                                 <div class="who">{{ model_icon(e) }}<span>{{ e.name }}{% if e.note %}<small>{{
                                             e.note }}</small>{% endif %}</span></div>
                             </th>
-                            <td class="score">
-                                <div><span class="meter"><i style="width:{{ e.score }}%"></i></span><b>{{
-                                        '%.1f'|format(e.score) }}</b></div>
-                            </td>
+                            <td class="score">{{ '%.1f'|format(e.score) }}</td>
                             <td class="num">{{ '%.1f'|format(e.instruction) }}</td>
                             <td class="num">{{ '%.1f'|format(e.visual) }}</td>
                             <td class="num time">{{ e.edit_display }}</td>

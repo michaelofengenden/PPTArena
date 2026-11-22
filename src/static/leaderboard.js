@@ -1,4 +1,4 @@
-/* Leaderboard page: split switch, sorting, linked highlight, two scatter plots, heat table.
+/* Leaderboard page: split switch, sorting, linked highlight, score bars, two scatter plots, heat table.
    All numbers come from the server-rendered ranking table, so the table is the single source. */
 (() => {
     "use strict";
@@ -71,6 +71,43 @@
             });
             body.addEventListener("pointerleave", () => pick(panel, null));
         });
+    });
+
+    // ---------- Score bars: point at or tab to a column for the full name and both parts of the score ----------
+
+    panels.forEach((panel) => {
+        const figure = panel.querySelector(".bars");
+        if (!figure) return;
+        const tip = document.createElement("div");
+        tip.className = "tip";
+        tip.hidden = true;
+        figure.append(tip);
+
+        function show(column) {
+            const row = panel.querySelector(`.rank tr[data-id="${column.dataset.id}"]`);
+            pick(panel, column.dataset.id);
+            const name = document.createElement("b"), detail = document.createElement("span");
+            name.textContent = row.dataset.name;
+            detail.textContent = `Instruction ${one(+row.dataset.instruction)}, visual ${one(+row.dataset.visual)}`;
+            tip.replaceChildren(name, detail);
+            tip.hidden = false;
+            const frame = figure.getBoundingClientRect(), box = column.querySelector("b").getBoundingClientRect();
+            const middle = box.left + box.width / 2 - frame.left;
+            tip.style.left = `${Math.min(Math.max(middle - tip.offsetWidth / 2, 0), frame.width - tip.offsetWidth)}px`;
+            tip.style.top = `${box.top - frame.top - tip.offsetHeight - 6}px`;
+        }
+
+        function hide() {
+            tip.hidden = true;
+            pick(panel, null);
+        }
+
+        all("li", figure).forEach((column) => {
+            column.addEventListener("pointerenter", () => show(column));
+            column.addEventListener("focus", () => show(column));
+            column.addEventListener("blur", hide);
+        });
+        figure.querySelector("ol").addEventListener("pointerleave", hide);
     });
 
     // ---------- Heat table: one blue, darker means a higher score (lighter in dark mode) ----------

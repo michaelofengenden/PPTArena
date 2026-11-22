@@ -29,6 +29,7 @@ def summarize(leaderboard_data):
         by_category = [{e["name"]: e["score_pct"] for e in view["entries"]} for view in category_views]
         judges = Counter(e["judge"] for e in all_view["entries"])
         common_judge = judges.most_common(1)[0][0] if judges else ""
+        top = max((e["score_pct"] for e in all_view["entries"]), default=0)
         entries = []
         for rank, e in enumerate(all_view["entries"], 1):
             entries.append({
@@ -41,6 +42,7 @@ def summarize(leaderboard_data):
                 "icon": e.get("icon", e["name"][:1]),
                 "color": e.get("color", "#6e6e6e"),
                 "score": e["score_pct"],
+                "bar": 100 * e["score_pct"] / top if top else 0.0,     # bar height, % of the tallest bar
                 "instruction": e["if_pct"],
                 "visual": e["vq_pct"],
                 "edit_minutes": None if e.get("edit_time_s") is None else e["edit_time_s"] / 60,

@@ -78,6 +78,15 @@ class SplitSummaryTest(unittest.TestCase):
         self.assertEqual(self.rows["Codex (GPT-5.5 xhigh)"]["short"], "GPT-5.5")
         self.assertEqual(self.rows["Baidu DuMate"]["short"], "Baidu DuMate")
 
+    def test_bar_height_is_the_share_of_the_best_score_in_the_split(self):
+        self.assertEqual(self.rows["Codex (GPT-5.5 xhigh)"]["bar"], 100.0)
+        self.assertAlmostEqual(self.rows["OpenCode (GLM-5.2)"]["bar"], 100 * 46.0 / 66.0)
+
+    def test_bar_height_is_zero_when_no_system_scored_anything(self):
+        data = board()
+        data["groups"][0]["views"][0]["entries"] = [entry("Nobody", 0.0, expected=25, scored=0)]
+        self.assertEqual(leaderboard_view.summarize(data)[0]["entries"][0]["bar"], 0.0)
+
     def test_rows_keep_the_fields_the_brand_icon_is_drawn_from(self):
         row = self.rows["Baidu DuMate"]
         self.assertEqual((row["brand"], row["provider"], row["icon"], row["color"]),

@@ -239,7 +239,81 @@ h2 {
     opacity: 0.65;
 }
 
-/* The ranking: one row per system, the bar is the score. */
+/* Score bars: one column per system, best first. The tallest bar fills the plot. */
+
+.bars {
+    --plot: 264px;
+    position: relative;
+    margin: 6px 0 30px;
+}
+
+/* The baseline is painted on the row, so dimming a column never dims it. */
+.bars ol {
+    display: grid;
+    grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    background: linear-gradient(var(--border-strong), var(--border-strong)) 0 var(--plot) / 100% 1px no-repeat;
+}
+
+.bars li {
+    min-width: 0;
+    outline: none;
+    transition: opacity 120ms;
+}
+
+.bars .col {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    height: var(--plot);
+    padding-top: 28px;
+}
+
+.bars b {
+    flex: none;
+    margin-bottom: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.bars b span + span {
+    display: none;
+}
+
+.bars .bar {
+    flex: none;
+    display: block;
+    width: 56%;
+    max-width: 54px;
+    min-height: 2px;
+    background: var(--data);
+    border-radius: 4px 4px 0 0;
+}
+
+.bars li:focus-visible .bar {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+}
+
+.bars .tag {
+    padding: 10px 3px 0;
+    font-size: 12.5px;
+    line-height: 1.25;
+    text-align: center;
+    color: var(--ink-2);
+    overflow-wrap: break-word;
+}
+
+.bars .tag .micon {
+    margin: 0 auto 6px;
+}
+
+/* The ranking: one row per system. */
 
 .rank {
     width: 100%;
@@ -332,33 +406,12 @@ h2 {
 }
 
 .rank .score {
-    width: 38%;
-    min-width: 150px;
-}
-
-.rank .score div {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    height: 1.55em;
-}
-
-.meter {
-    flex: 1;
-    height: 8px;
-}
-
-.meter i {
-    display: block;
-    height: 100%;
-    min-width: 2px;
-    background: var(--data);
-    border-radius: 0 4px 4px 0;
-}
-
-.rank .score b {
-    min-width: 2.6em;
+    width: 6.2rem;
     font-weight: 600;
+}
+
+.rank thead .score {
+    font-weight: 400;
 }
 
 .rank .num {
@@ -378,6 +431,7 @@ h2 {
 @media (prefers-reduced-motion: reduce) {
     .rank tbody tr,
     .heat tbody tr,
+    .bars li,
     .plot .dot,
     .plot .label {
         transition: none;
@@ -387,10 +441,6 @@ h2 {
 /* Linked highlight: pointing at a system anywhere dims every other system everywhere. */
 .split.has-pick [data-id]:not(.is-pick) {
     opacity: 0.32;
-}
-
-.split.has-pick .is-pick .meter i {
-    background: var(--data);
 }
 
 .foot-note {
@@ -697,12 +747,56 @@ h2 {
     }
 
     .rank .score {
-        width: 46%;
-        min-width: 0;
+        width: 3.4rem;
     }
 
-    .rank .score div {
-        gap: 10px;
+    /* Bars on a phone: every system still fits side by side, so names run up the page. */
+    .bars {
+        --plot: 200px;
+    }
+
+    .bars .col {
+        padding-top: 22px;
+    }
+
+    .bars b {
+        margin-bottom: 5px;
+        font-size: 11px;
+        font-weight: 500;
+    }
+
+    .bars b span {
+        display: none;
+    }
+
+    .bars b span + span {
+        display: inline;
+    }
+
+    .bars .bar {
+        width: 62%;
+        border-radius: 3px 3px 0 0;
+    }
+
+    .bars .tag {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 8px 0 0;
+        font-size: 12px;
+    }
+
+    .bars .tag .micon {
+        width: 16px;
+        height: 16px;
+        margin: 0 0 6px;
+    }
+
+    .bars .tag span:last-child {
+        writing-mode: vertical-rl;
+        transform: rotate(180deg);
+        white-space: nowrap;
+        text-align: right;
     }
 
     .heat {

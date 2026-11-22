@@ -87,6 +87,13 @@ class SplitSummaryTest(unittest.TestCase):
         data["groups"][0]["views"][0]["entries"] = [entry("Nobody", 0.0, expected=25, scored=0)]
         self.assertEqual(leaderboard_view.summarize(data)[0]["entries"][0]["bar"], 0.0)
 
+    def test_rows_name_their_family_so_bars_and_dots_share_a_color(self):
+        data = board()
+        data["groups"][1]["views"][0]["entries"][0]["brand"] = "OpenAI"
+        data["groups"][1]["views"][0]["entries"][1]["brand"] = "GLM"
+        rows = leaderboard_view.summarize(data)[1]["entries"]
+        self.assertEqual([r["family"] for r in rows], ["openai", "glm", "brand"])
+
     def test_rows_keep_the_fields_the_brand_icon_is_drawn_from(self):
         row = self.rows["Baidu DuMate"]
         self.assertEqual((row["brand"], row["provider"], row["icon"], row["color"]),

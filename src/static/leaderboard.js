@@ -160,6 +160,7 @@
             id: row.dataset.id,
             name: row.dataset.name,
             short: row.dataset.short,
+            family: row.dataset.family,
             score: parseFloat(row.dataset.score),
             instruction: parseFloat(row.dataset.instruction),
             visual: parseFloat(row.dataset.visual),
@@ -340,7 +341,7 @@
         }
 
         points.forEach((point) => {
-            const group = svg("g", { "data-id": point.id, tabindex: 0, role: "img", "aria-label": `${point.name}: ${spec.tip(point)}` });
+            const group = svg("g", { "data-id": point.id, "data-family": point.family, tabindex: 0, role: "img", "aria-label": `${point.name}: ${spec.tip(point)}` });
             if (point.label && point.label.leader) {
                 const toward = point.label.anchor === "start" ? -3 : point.label.anchor === "end" ? 3 : 0;
                 const edge = point.label.y > point.py ? -7 : point.label.y < point.py ? 7 : 0;

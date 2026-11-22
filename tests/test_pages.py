@@ -59,6 +59,21 @@ class PagesTest(unittest.TestCase):
             for height, score in zip(heights, scores):
                 self.assertAlmostEqual(height, 100 * score / max(scores), places=1)
 
+    def test_every_bar_is_colored_by_its_family_and_every_family_has_a_light_and_a_dark_color(self):
+        page = self.get("/evaluation").get_data(as_text=True)
+        styles = (ROOT / "src" / "static" / "site.css").read_text(encoding="utf-8")
+        light, dark = styles.split("/* Family colors, dark */")
+        for split in self.view.summarize(self.app.get_leaderboard_data()):
+            panel = page.split(f'data-split-panel="{split["key"]}"')[1].split("data-split-panel=")[0]
+            bars = re.findall(r'<li data-id="([^"]+)" data-family="([^"]+)"', panel)
+            self.assertEqual(bars, [(entry["id"], entry["family"]) for entry in split["entries"]])
+            for family in {family for _, family in bars}:
+                self.assertEqual(light.count(f'[data-family="{family}"]'), 1, family)
+                self.assertEqual(dark.count(f'[data-family="{family}"]'), 1, family)
+        # two systems of one family share a color; two families never do
+        colors = dict(re.findall(r'\[data-family="([a-z]+)"\]\s*{\s*--fam:\s*(#[0-9a-f]{6})', light))
+        self.assertEqual(len(set(colors.values())), len(colors))
+
     def test_every_ranked_system_shows_its_real_brand_mark_not_a_drawing_or_a_letter(self):
         page = self.get("/evaluation").get_data(as_text=True)
         for mark in ("openai", "claude", "gemini", "kimi", "minimax", "deepseek", "zai"):

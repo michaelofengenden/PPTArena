@@ -1,4 +1,4 @@
-/* PPTArena site styles. Black, white and grey for the page; blue only for data. */
+/* PPTArena site styles. Black, white and grey for the page; color only for data. */
 
 :root {
     color-scheme: light;
@@ -239,6 +239,82 @@ h2 {
     opacity: 0.65;
 }
 
+/* Family colors: one hue per model family, worn by its bars and its dots. Gemini and Claude
+   take the hue of their own mark; the rest are placed so that neighbors on both boards stay
+   easy to tell apart. A family with no color yet shows grey. */
+
+[data-family] {
+    --fam: var(--faint);
+}
+
+[data-family="gemini"] {
+    --fam: #2a78d6;
+}
+
+[data-family="claude"] {
+    --fam: #eb6834;
+}
+
+[data-family="openai"] {
+    --fam: #6250d6;
+}
+
+[data-family="baidu"] {
+    --fam: #1baf7a;
+}
+
+[data-family="kimi"] {
+    --fam: #e34948;
+}
+
+[data-family="deepseek"] {
+    --fam: #008300;
+}
+
+[data-family="glm"] {
+    --fam: #eda100;
+}
+
+[data-family="minimax"] {
+    --fam: #e87ba4;
+}
+
+/* Family colors, dark */
+
+@media (prefers-color-scheme: dark) {
+    [data-family="gemini"] {
+        --fam: #3987e5;
+    }
+
+    [data-family="claude"] {
+        --fam: #d95926;
+    }
+
+    [data-family="openai"] {
+        --fam: #9085e9;
+    }
+
+    [data-family="baidu"] {
+        --fam: #199e70;
+    }
+
+    [data-family="kimi"] {
+        --fam: #e66767;
+    }
+
+    [data-family="deepseek"] {
+        --fam: #0ca30c;
+    }
+
+    [data-family="glm"] {
+        --fam: #c98500;
+    }
+
+    [data-family="minimax"] {
+        --fam: #d55181;
+    }
+}
+
 /* Score bars: one column per system, best first. The tallest bar fills the plot. */
 
 .bars {
@@ -291,7 +367,7 @@ h2 {
     width: 56%;
     max-width: 54px;
     min-height: 2px;
-    background: var(--data);
+    background: var(--fam, var(--data));
     border-radius: 4px 4px 0 0;
 }
 
@@ -531,7 +607,7 @@ h2 {
 }
 
 .plot .dot {
-    fill: var(--data);
+    fill: var(--fam, var(--data));
     stroke: var(--bg);
     stroke-width: 2;
     transition: fill 120ms;

@@ -38,6 +38,7 @@ def summarize(leaderboard_data):
                 "name": e["name"],
                 "short": e.get("chart_label") or e["name"],
                 "brand": e.get("brand", ""),
+                "family": _slug(e.get("brand", "")),      # picks the color its bar and dots wear
                 "provider": e.get("provider", ""),
                 "icon": e.get("icon", e["name"][:1]),
                 "color": e.get("color", "#6e6e6e"),

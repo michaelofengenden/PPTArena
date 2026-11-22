@@ -64,7 +64,7 @@
                     <figcaption class="vh">Score of each system on the {{ split.label }}, best first</figcaption>
                     <ol>
                         {% for e in split.entries %}
-                        <li data-id="{{ e.id }}" tabindex="0"
+                        <li data-id="{{ e.id }}" data-family="{{ e.family }}" tabindex="0"
                             aria-label="{{ e.name }}: score {{ '%.1f'|format(e.score) }}, instruction {{ '%.1f'|format(e.instruction) }}, visual {{ '%.1f'|format(e.visual) }}">
                             <div class="col"><b><span>{{ '%.1f'|format(e.score) }}</span><span>{{
                                         (e.score + 0.5)|int }}</span></b><i class="bar" style="height:{{ '%.2f'|format(e.bar) }}%"></i></div>
@@ -90,7 +90,7 @@
                     </thead>
                     <tbody>
                         {% for e in split.entries %}
-                        <tr data-id="{{ e.id }}" data-name="{{ e.name }}" data-short="{{ e.short }}"
+                        <tr data-id="{{ e.id }}" data-family="{{ e.family }}" data-name="{{ e.name }}" data-short="{{ e.short }}"
                             data-score="{{ e.score }}" data-instruction="{{ e.instruction }}"
                             data-visual="{{ e.visual }}"
                             data-time="{{ '%.3f'|format(e.edit_minutes) if e.edit_minutes is not none else '' }}">

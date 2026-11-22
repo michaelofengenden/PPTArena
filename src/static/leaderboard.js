@@ -110,10 +110,10 @@
         figure.querySelector("ol").addEventListener("pointerleave", hide);
     });
 
-    // ---------- Heat table: one blue, darker means a higher score (lighter in dark mode) ----------
+    // ---------- Heat table: one quiet blue, darker means a higher score (lighter in dark mode) ----------
 
-    const RAMP = ["#cde2fb", "#b7d3f6", "#9ec5f4", "#86b6ef", "#6da7ec", "#5598e7", "#3987e5",
-        "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#104281", "#0d366b"]
+    const RAMP = ["#d9e5f9", "#c4d5ef", "#b0c4e6", "#9bb4dc", "#87a4d2", "#7494c7", "#6184bd",
+        "#4d74b3", "#4064a1", "#34568e", "#28477b", "#1d3a69", "#122c58"]
         .map((hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)));
 
     function rampColor(share, dark) {

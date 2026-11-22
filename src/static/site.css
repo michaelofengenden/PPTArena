@@ -11,9 +11,9 @@
     --border: #e3e3e3;
     --border-strong: #c9c9c9;
     --hairline: #efefef;
-    --data: #2a78d6;
+    --data: #4a72b5;
     --data-off: #d6d6d6;
-    --accent: #2a78d6;
+    --accent: #4a72b5;
     --accent-soft: #eaf2fc;
     --green: #0a7a0a;
     --red: #c23030;
@@ -35,9 +35,9 @@
         --border: #2b2b2b;
         --border-strong: #3d3d3d;
         --hairline: #1f1f1f;
-        --data: #3987e5;
+        --data: #7a9ed8;
         --data-off: #3a3a3a;
-        --accent: #3987e5;
+        --accent: #7a9ed8;
         --accent-soft: #14253b;
         --green: #2fb62f;
         --red: #e66767;
@@ -239,79 +239,80 @@ h2 {
     opacity: 0.65;
 }
 
-/* Family colors: one hue per model family, worn by its bars and its dots. Gemini and Claude
-   take the hue of their own mark; the rest are placed so that neighbors on both boards stay
-   easy to tell apart. A family with no color yet shows grey. */
+/* Family colors: one muted hue per model family, worn by its bars and its dots. OpenAI, Claude
+   and Gemini use the same colors as on agenttimebench.com, and so do the purple and the amber;
+   rose, sage and sky were added in the same quiet range. They are placed so that neighbors on
+   both boards stay easy to tell apart. A family with no color yet shows grey. */
 
 [data-family] {
     --fam: var(--faint);
 }
 
 [data-family="gemini"] {
-    --fam: #2a78d6;
+    --fam: #4a72b5;
 }
 
 [data-family="claude"] {
-    --fam: #eb6834;
+    --fam: #a64c23;
 }
 
 [data-family="openai"] {
-    --fam: #6250d6;
+    --fam: #357f68;
 }
 
 [data-family="baidu"] {
-    --fam: #1baf7a;
+    --fam: #95b162;
 }
 
 [data-family="kimi"] {
-    --fam: #e34948;
+    --fam: #5b3f86;
 }
 
 [data-family="deepseek"] {
-    --fam: #008300;
+    --fam: #70b4dc;
 }
 
 [data-family="glm"] {
-    --fam: #eda100;
+    --fam: #da7a00;
 }
 
 [data-family="minimax"] {
-    --fam: #e87ba4;
+    --fam: #b47699;
 }
 
 /* Family colors, dark */
 
 @media (prefers-color-scheme: dark) {
     [data-family="gemini"] {
-        --fam: #3987e5;
+        --fam: #7a9ed8;
     }
 
     [data-family="claude"] {
-        --fam: #d95926;
+        --fam: #c17450;
     }
 
     [data-family="openai"] {
-        --fam: #9085e9;
+        --fam: #55a98c;
     }
 
     [data-family="baidu"] {
-        --fam: #199e70;
+        --fam: #afc177;
     }
 
     [data-family="kimi"] {
-        --fam: #e66767;
+        --fam: #925ebf;
     }
 
     [data-family="deepseek"] {
-        --fam: #0ca30c;
+        --fam: #345962;
     }
 
     [data-family="glm"] {
-        --fam: #c98500;
+        --fam: #ff9a52;
     }
 
     [data-family="minimax"] {
-        --fam: #d55181;
+        --fam: #d28bb3;
     }
 }
 
